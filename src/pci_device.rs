@@ -17,6 +17,9 @@ use ratatui::text::Line;
 #[derive(Clone)]
 pub struct DeviceSummary {
     pub address: String,
+    pub tree_chain: Vec<String>,
+    pub current_link_speed: Option<u8>,
+    pub current_link_width: Option<u8>,
     pub vendor_id: u16,
     pub device_id: u16,
     pub name_suffix: String,
@@ -28,15 +31,16 @@ pub struct DeviceSummary {
 }
 
 pub fn list_devices() -> Result<Vec<String>> {
-    let mut devices = Vec::new();
+    let mut devices: Vec<(Vec<String>, String)> = Vec::new();
     for entry in fs::read_dir(SYSFS_DEVICES).context("scanning /sys/bus/pci/devices")? {
         let entry = entry?;
         if let Some(name) = entry.file_name().to_str() {
-            devices.push(name.to_owned());
+            let chain = device_tree_chain(name).unwrap_or_else(|| vec![name.to_string()]);
+            devices.push((chain, name.to_owned()));
         }
     }
-    devices.sort();
-    Ok(devices)
+    devices.sort_by(|a, b| a.0.cmp(&b.0));
+    Ok(devices.into_iter().map(|(_, name)| name).collect())
 }
 
 pub fn summarize_device(address: &str) -> Result<DeviceSummary> {
@@ -52,8 +56,13 @@ pub fn summarize_device(address: &str) -> Result<DeviceSummary> {
         return Err(anyhow!("config space too short ({} bytes)", n));
     }
     let header = PciConfigHdr::parse(&buf)?;
+    let tree_chain = device_tree_chain(address).unwrap_or_else(|| vec![address.to_string()]);
+    let (current_link_speed, current_link_width) = current_link_status(&header, &buf);
     Ok(DeviceSummary {
         address: address.to_string(),
+        tree_chain,
+        current_link_speed,
+        current_link_width,
         vendor_id: header.vendor_id,
         device_id: header.device_id,
         name_suffix: pci_ids::name_suffix(header.vendor_id, header.device_id),
@@ -63,6 +72,66 @@ pub fn summarize_device(address: &str) -> Result<DeviceSummary> {
         subclass: header.subclass,
         prog_if: header.prog_if,
     })
+}
+
+fn device_tree_chain(address: &str) -> Option<Vec<String>> {
+    let device_path = Path::new(SYSFS_DEVICES).join(address);
+    let link = fs::read_link(device_path).ok()?;
+    let mut chain = Vec::new();
+    for comp in link.components() {
+        if let std::path::Component::Normal(name) = comp {
+            let name_str = name.to_string_lossy();
+            if is_pci_address(&name_str) {
+                chain.push(name_str.to_string());
+            }
+        }
+    }
+    if chain.is_empty() {
+        None
+    } else {
+        if chain.last().map(String::as_str) != Some(address) {
+            chain.push(address.to_string());
+        }
+        Some(chain)
+    }
+}
+
+fn is_pci_address(name: &str) -> bool {
+    let bytes = name.as_bytes();
+    if bytes.len() != 12 {
+        return false;
+    }
+    if bytes[4] != b':' || bytes[7] != b':' || bytes[10] != b'.' {
+        return false;
+    }
+    for (idx, byte) in bytes.iter().copied().enumerate() {
+        if idx == 4 || idx == 7 || idx == 10 {
+            continue;
+        }
+        if !byte.is_ascii_hexdigit() {
+            return false;
+        }
+    }
+    true
+}
+
+fn current_link_status(header: &PciConfigHdr, config: &[u8]) -> (Option<u8>, Option<u8>) {
+    let caps = scan_standard_capabilities(header, config);
+    for (_off, id, bytes) in caps {
+        if id != 0x10 {
+            continue;
+        }
+        if let Some(raw) = pci_capa::read_raw(&bytes, 0x12, pci_capa::RegisterSize::Word) {
+            let status = raw as u16;
+            let speed = (status & 0x0f) as u8;
+            let width = ((status >> 4) & 0x3f) as u8;
+            if speed == 0 || width == 0 {
+                return (None, None);
+            }
+            return (Some(speed), Some(width));
+        }
+    }
+    (None, None)
 }
 
 pub fn get_device_tree(summary: &DeviceSummary) -> Result<PciDevice> {

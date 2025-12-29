@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::time::Duration;
 
 use anyhow::Result;
@@ -23,6 +24,7 @@ struct App {
     status: Option<String>,
     main_list_state: ListState,
     device_list_state: ListState,
+    device_hscroll: usize,
 }
 
 impl App {
@@ -36,6 +38,7 @@ impl App {
             status: None,
             main_list_state: ListState::default(),
             device_list_state,
+            device_hscroll: 0,
         }
     }
 
@@ -163,6 +166,16 @@ impl App {
                 return;
             }
             self.set_main_index(count - 1);
+        }
+    }
+
+    fn scroll_device_horiz(&mut self, delta: isize, max: usize) {
+        if delta < 0 {
+            let step = (-delta) as usize;
+            self.device_hscroll = self.device_hscroll.saturating_sub(step);
+        } else if delta > 0 {
+            let step = delta as usize;
+            self.device_hscroll = (self.device_hscroll + step).min(max);
         }
     }
 }
@@ -363,12 +376,18 @@ fn run_app(
                         }
                     }
                     KeyCode::Left => {
-                        if !app.show_popup {
+                        if app.show_popup {
+                            let max_scroll = popup_max_hscroll(terminal, &app.devices)?;
+                            app.scroll_device_horiz(-4, max_scroll);
+                        } else {
                             app.set_expansion(false);
                         }
                     }
                     KeyCode::Right => {
-                        if !app.show_popup {
+                        if app.show_popup {
+                            let max_scroll = popup_max_hscroll(terminal, &app.devices)?;
+                            app.scroll_device_horiz(4, max_scroll);
+                        } else {
                             app.set_expansion(true);
                         }
                     }
@@ -403,25 +422,36 @@ fn ui(frame: &mut Frame, app: &mut App) {
     frame.render_stateful_widget(list, main_area, &mut app.main_list_state);
 
     if app.show_popup {
-        let area = centered_rect(80, 80, area);
+        let area = popup_rect(area);
         frame.render_widget(Clear, area);
         frame.render_widget(
-            Block::default().style(Style::default().bg(Color::DarkGray)),
+            Block::default().style(Style::default().bg(Color::Rgb(32, 32, 32))),
             area,
         );
+        let hscroll = app.device_hscroll;
+        let prefixes = build_device_tree_prefix_spans(&app.devices);
         let items: Vec<ListItem> = app
             .devices
             .iter()
-            .map(|d| {
-                let line = format!(
-                    "{} {:04x}:{:04x}{}",
-                    d.address, d.vendor_id, d.device_id, d.name_suffix
-                );
-                ListItem::new(line)
+            .zip(prefixes.into_iter())
+            .map(|(d, mut prefix_spans)| {
+                prefix_spans.push(Span::styled(
+                    d.address.clone(),
+                    Style::default().fg(Color::LightYellow),
+                ));
+                prefix_spans.push(Span::raw(format!(
+                    " {:04x}:{:04x}{}",
+                    d.vendor_id, d.device_id, d.name_suffix
+                )));
+                let spans = trim_spans(prefix_spans, hscroll);
+                ListItem::new(Line::from(spans))
             })
             .collect();
         let list = List::new(items)
-            .block(Block::default().title("Select device"))
+            .block(Block::default().title(Span::styled(
+                "Root Complex",
+                Style::default().fg(Color::LightYellow),
+            )))
             .highlight_style(Style::default().bg(Color::Blue).fg(Color::White));
         frame.render_stateful_widget(list, area, &mut app.device_list_state);
     }
@@ -430,9 +460,14 @@ fn ui(frame: &mut Frame, app: &mut App) {
         let para = Paragraph::new(status.clone()).style(Style::default().fg(Color::Yellow));
         frame.render_widget(para, status_area);
     } else {
-        let shortcuts = Paragraph::new(
-            "q: quit   d: select device   [/]: next/prev device   PgUp/PgDn/Home/End: page/top/bottom   ←/→: collapse/expand   ↑/↓: navigate",
-        )
+        let shortcuts = Paragraph::new(concat!(
+            "q: quit  ",
+            "d: select device  ",
+            "[/]: next/prev device  ",
+            "PgUp/PgDn/Home/End: page/top/bottom  ",
+            "←/→: collapse/expand  ",
+            "↑/↓: navigate"
+        ))
         .style(Style::default().fg(Color::Yellow).bg(Color::Blue));
         frame.render_widget(shortcuts, status_area);
     }
@@ -484,13 +519,185 @@ fn centered_rect(percent_x: u16, percent_y: u16, r: Rect) -> Rect {
     horizontal[1]
 }
 
+fn popup_rect(area: Rect) -> Rect {
+    let mut rect = centered_rect(80, 80, area);
+    rect.y = rect.y.saturating_add(3);
+    let width = area.width.saturating_sub(2);
+    if width > 0 {
+        rect.x = area.x + 1;
+        rect.width = width;
+    }
+    rect
+}
+
+fn build_device_tree_prefix_spans(devices: &[DeviceSummary]) -> Vec<Vec<Span<'static>>> {
+    const ROOT_INDENT: &str = "  ";
+    let labels: Vec<Option<String>> = devices.iter().map(format_link_info).collect();
+    let max_label_len = labels
+        .iter()
+        .filter_map(|label| label.as_ref().map(|s| s.len()))
+        .max()
+        .unwrap_or(0);
+    let segment_width = if max_label_len > 0 {
+        max_label_len + 2
+    } else {
+        2
+    };
+    let indent_width = segment_width + 2;
+    let mut last_child: HashMap<String, String> = HashMap::new();
+    for device in devices {
+        let chain = &device.tree_chain;
+        if chain.is_empty() {
+            continue;
+        }
+        let parent_key = chain[..chain.len() - 1].join("/");
+        if let Some(name) = chain.last() {
+            last_child.insert(parent_key, name.clone());
+        }
+    }
+
+    let mut prefixes = Vec::with_capacity(devices.len());
+    for (device, label) in devices.iter().zip(labels.into_iter()) {
+        let chain = &device.tree_chain;
+        if chain.is_empty() {
+            prefixes.push(Vec::new());
+            continue;
+        }
+        let depth = chain.len() - 1;
+        let mut prefix = vec![Span::raw(ROOT_INDENT)];
+        for idx in 0..depth {
+            let ancestor_parent_key = chain[..idx].join("/");
+            let ancestor_name = &chain[idx];
+            let is_last_ancestor = last_child
+                .get(&ancestor_parent_key)
+                .map(|last| last == ancestor_name)
+                .unwrap_or(true);
+            if is_last_ancestor {
+                prefix.push(Span::raw(" ".repeat(indent_width)));
+            } else {
+                prefix.push(Span::styled("│", Style::default().fg(Color::Blue)));
+                if indent_width > 1 {
+                    prefix.push(Span::raw(" ".repeat(indent_width - 1)));
+                }
+            }
+        }
+
+        let parent_key = chain[..depth].join("/");
+        let current_name = chain.last().expect("chain is not empty");
+        let is_last = last_child
+            .get(&parent_key)
+            .map(|last| last == current_name)
+            .unwrap_or(true);
+        let connector = if is_last { "└" } else { "├" };
+        prefix.push(Span::styled(connector, Style::default().fg(Color::Blue)));
+
+        if let Some(link) = label {
+            let link_len = link.len();
+            prefix.push(Span::styled("─", Style::default().fg(Color::Blue)));
+            prefix.push(Span::styled(link, Style::default().fg(Color::Blue)));
+            let used = link_len + 1;
+            let pad = segment_width.saturating_sub(used);
+            if pad > 0 {
+                prefix.push(Span::styled(
+                    "─".repeat(pad),
+                    Style::default().fg(Color::Blue),
+                ));
+            }
+            prefix.push(Span::raw(" "));
+        } else {
+            prefix.push(Span::styled(
+                "─".repeat(segment_width),
+                Style::default().fg(Color::Blue),
+            ));
+            prefix.push(Span::raw(" "));
+        }
+        prefixes.push(prefix);
+    }
+    prefixes
+}
+
+fn popup_max_hscroll(
+    terminal: &Terminal<CrosstermBackend<std::io::Stdout>>,
+    devices: &[DeviceSummary],
+) -> Result<usize> {
+    let area = popup_rect(terminal.size()?.into());
+    let prefixes = build_device_tree_prefix_spans(devices);
+    let max_len = devices
+        .iter()
+        .zip(prefixes.into_iter())
+        .map(|(d, mut spans)| {
+            spans.push(Span::raw(d.address.clone()));
+            spans.push(Span::raw(format!(
+                " {:04x}:{:04x}{}",
+                d.vendor_id, d.device_id, d.name_suffix
+            )));
+            spans_len(&spans)
+        })
+        .max()
+        .unwrap_or(0);
+    let width = area.width as usize;
+    Ok(max_len.saturating_sub(width))
+}
+
+fn spans_len(spans: &[Span<'static>]) -> usize {
+    spans.iter().map(|span| span.content.chars().count()).sum()
+}
+
+fn trim_spans(spans: Vec<Span<'static>>, mut offset: usize) -> Vec<Span<'static>> {
+    if offset == 0 {
+        return spans;
+    }
+    let mut trimmed = Vec::new();
+    for span in spans {
+        if offset == 0 {
+            trimmed.push(span);
+            continue;
+        }
+        let content = span.content;
+        let len = content.chars().count();
+        if offset >= len {
+            offset -= len;
+            continue;
+        }
+        let start_idx = content
+            .char_indices()
+            .nth(offset)
+            .map(|(idx, _)| idx)
+            .unwrap_or(content.len());
+        let sliced = content[start_idx..].to_string();
+        trimmed.push(Span::styled(sliced, span.style));
+        offset = 0;
+    }
+    trimmed
+}
+
+fn format_link_info(device: &DeviceSummary) -> Option<String> {
+    let speed = device.current_link_speed?;
+    let width = device.current_link_width?;
+    let generation = link_gen(speed)?;
+    Some(format!("Gen{}x{}", generation, width))
+}
+
+fn link_gen(code: u8) -> Option<u8> {
+    match code {
+        1 => Some(1),
+        2 => Some(2),
+        3 => Some(3),
+        4 => Some(4),
+        5 => Some(5),
+        6 => Some(6),
+        7 => Some(7),
+        _ => None,
+    }
+}
+
 fn current_page_size(
     terminal: &Terminal<CrosstermBackend<std::io::Stdout>>,
     show_popup: bool,
 ) -> Result<usize> {
     let area = terminal.size()?;
     let height = if show_popup {
-        let popup = centered_rect(80, 80, area.into());
+        let popup = popup_rect(area.into());
         popup.height.saturating_sub(1)
     } else {
         let vertical = Layout::default()

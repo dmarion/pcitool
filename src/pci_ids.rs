@@ -54,12 +54,9 @@ fn load_pci_ids() -> Option<PciIds> {
 }
 
 pub fn name_suffix(vendor_id: u16, device_id: u16) -> String {
-    pci_ids()
-        .and_then(|ids| ids.describe_parts(vendor_id, device_id))
-        .map(|(vendor, device)| {
-            let rest = device.map(|d| format!(" {d}")).unwrap_or_default();
-            format!(" ({vendor}{rest})")
-        })
+    device_name(vendor_id, device_id)
+        .filter(|name| !name.is_empty())
+        .map(|name| format!(" ({name})"))
         .unwrap_or_default()
 }
 
@@ -73,16 +70,4 @@ pub fn device_name(vendor_id: u16, device_id: u16) -> Option<&'static str> {
     pci_ids()
         .and_then(|ids| ids.device_names.get(&(vendor_id, device_id)))
         .map(String::as_str)
-}
-
-impl PciIds {
-    fn describe_parts(&self, vendor_id: u16, device_id: u16) -> Option<(String, Option<String>)> {
-        let vendor_name = self.vendor_names.get(&vendor_id)?.clone();
-        let device_name = self
-            .device_names
-            .get(&(vendor_id, device_id))
-            .cloned()
-            .filter(|s| !s.is_empty());
-        Some((vendor_name, device_name))
-    }
 }

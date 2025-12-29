@@ -608,11 +608,12 @@ fn aspm_support_name(code: u8) -> &'static str {
 fn link_speed_name(code: u8) -> &'static str {
     match code {
         1 => "2.5",
-        2 => "5.0",
-        3 => "8.0",
-        4 => "16.0",
-        5 => "32.0",
-        6 => "64.0",
+        2 => "5",
+        3 => "8",
+        4 => "16",
+        5 => "32",
+        6 => "64",
+        7 => "128",
         _ => "unknown",
     }
 }
