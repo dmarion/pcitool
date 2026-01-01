@@ -1,9 +1,9 @@
-use crate::tree::PciNode;
+use crate::pci_device::PciCapa;
+use crate::tree::{TreeLine, TreeNode};
 use linkme::distributed_slice;
-use ratatui::text::Line;
 
-pub type StdCapEntry = (u8, u8, Vec<u8>);
-pub type ExtCapEntry = (u16, u8, u16, Vec<u8>);
+pub type StdCapEntry = (u8, u8, u8);
+pub type ExtCapEntry = (u16, u8, u16, u16);
 
 #[derive(Clone, Copy)]
 pub enum RegisterSize {
@@ -34,7 +34,7 @@ pub struct ExtCapabilityDesc {
     pub version: u8,
     pub name: &'static str,
     pub registers: &'static [RegisterDesc],
-    pub summary: Option<fn(u16, u8, &[u8]) -> Option<Vec<PciNode>>>,
+    pub summary: Option<fn(&PciCapa) -> Option<Vec<TreeNode>>>,
 }
 
 #[derive(Default)]
@@ -42,7 +42,7 @@ pub struct StdCapabilityDesc {
     pub id: u8,
     pub name: &'static str,
     pub registers: &'static [RegisterDesc],
-    pub summary: Option<fn(u8, &[u8], &[u8]) -> Option<Vec<PciNode>>>,
+    pub summary: Option<fn(&PciCapa) -> Option<Vec<TreeNode>>>,
 }
 
 #[distributed_slice]
@@ -232,20 +232,20 @@ pub fn print_registers(
     mut fetch: impl FnMut(u16, RegisterSize) -> Option<u64>,
     offset_width: usize,
     verbosity: u8,
-    out: &mut Vec<PciNode>,
+    out: &mut Vec<TreeNode>,
 ) {
     for reg in regs {
         if let Some(raw) = fetch(reg.offset, reg.size) {
             let value_str = format_reg_value(raw, reg.size);
             let extra = binary_suffix_hex(raw, reg.size, verbosity);
-            let mut reg_node = PciNode::with_value_collapsed(
-                Line::from(format!(
+            let mut reg_node = TreeNode::with_value_collapsed(
+                TreeLine::from(format!(
                     "  0x{:0width$x} {}",
                     reg.offset,
                     reg.name,
                     width = offset_width
                 )),
-                Line::from(format!("{}{}", value_str, extra)),
+                TreeLine::from(format!("{}{}", value_str, extra)),
             );
 
             for field in reg.fields {
@@ -256,9 +256,9 @@ pub fn print_registers(
                 };
                 let val = (raw >> field.lsb) & mask;
                 let mut field_node = if field.bits == 1 {
-                    PciNode::with_value(
-                        Line::from(format!("     {}", field.name)),
-                        Line::from(if val != 0 { "on" } else { "off" }),
+                    TreeNode::with_value(
+                        TreeLine::from(format!("     {}", field.name)),
+                        TreeLine::from(if val != 0 { "on" } else { "off" }),
                     )
                 } else {
                     let mut val_str = if val > 9 {
@@ -272,9 +272,9 @@ pub fn print_registers(
                         val_str = format!("{} ({})", val_str, name);
                     }
 
-                    PciNode::with_value(
-                        Line::from(format!("     {}", field.name)),
-                        Line::from(val_str),
+                    TreeNode::with_value(
+                        TreeLine::from(format!("     {}", field.name)),
+                        TreeLine::from(val_str),
                     )
                 };
                 field_node.align_with_parent = true;
@@ -282,27 +282,6 @@ pub fn print_registers(
             }
             out.push(reg_node);
         }
-    }
-}
-
-pub fn read_raw(bytes: &[u8], offset: u16, size: RegisterSize) -> Option<u64> {
-    let start = offset as usize;
-    match size {
-        RegisterSize::Byte => bytes.get(start).copied().map(u64::from),
-        RegisterSize::Word => bytes
-            .get(start..start + 2)
-            .and_then(|s| s.try_into().ok())
-            .map(u16::from_le_bytes)
-            .map(u64::from),
-        RegisterSize::Dword => bytes
-            .get(start..start + 4)
-            .and_then(|s| s.try_into().ok())
-            .map(u32::from_le_bytes)
-            .map(u64::from),
-        RegisterSize::Qword => bytes
-            .get(start..start + 8)
-            .and_then(|s| s.try_into().ok())
-            .map(u64::from_le_bytes),
     }
 }
 

@@ -1,21 +1,78 @@
-use ratatui::text::{Line, Span};
-
 const MIN_VALUE_COLUMN: usize = 28;
 
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum TreeColor {
+    Default,
+    Red,
+    Green,
+    Yellow,
+}
+
 #[derive(Clone, Debug)]
-pub struct PciNode {
-    pub name: Line<'static>,
-    pub value: Option<Line<'static>>,
-    pub children: Vec<PciNode>,
+pub struct TreeSpan {
+    pub text: String,
+    pub color: TreeColor,
+}
+
+impl TreeSpan {
+    pub fn raw(text: impl Into<String>) -> Self {
+        Self {
+            text: text.into(),
+            color: TreeColor::Default,
+        }
+    }
+
+    pub fn styled(text: impl Into<String>, color: TreeColor) -> Self {
+        Self {
+            text: text.into(),
+            color,
+        }
+    }
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct TreeLine {
+    pub spans: Vec<TreeSpan>,
+}
+
+impl TreeLine {}
+
+impl From<&str> for TreeLine {
+    fn from(s: &str) -> Self {
+        Self {
+            spans: vec![TreeSpan::raw(s)],
+        }
+    }
+}
+
+impl From<String> for TreeLine {
+    fn from(s: String) -> Self {
+        Self {
+            spans: vec![TreeSpan::raw(s)],
+        }
+    }
+}
+
+impl From<Vec<TreeSpan>> for TreeLine {
+    fn from(spans: Vec<TreeSpan>) -> Self {
+        Self { spans }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct TreeNode {
+    pub name: TreeLine,
+    pub value: Option<TreeLine>,
+    pub children: Vec<TreeNode>,
     pub expanded: bool,
     pub children_value_indent: usize,
     pub align_with_parent: bool,
 }
 
-impl PciNode {
-    pub fn new(name: Line<'static>) -> Self {
+impl TreeNode {
+    pub fn new(name: impl Into<TreeLine>) -> Self {
         Self {
-            name,
+            name: name.into(),
             value: None,
             children: Vec::new(),
             expanded: true,
@@ -24,10 +81,10 @@ impl PciNode {
         }
     }
 
-    pub fn with_value(name: Line<'static>, value: Line<'static>) -> Self {
+    pub fn with_value(name: impl Into<TreeLine>, value: impl Into<TreeLine>) -> Self {
         Self {
-            name,
-            value: Some(value),
+            name: name.into(),
+            value: Some(value.into()),
             children: Vec::new(),
             expanded: true,
             children_value_indent: 0,
@@ -35,10 +92,10 @@ impl PciNode {
         }
     }
 
-    pub fn with_value_collapsed(name: Line<'static>, value: Line<'static>) -> Self {
+    pub fn with_value_collapsed(name: impl Into<TreeLine>, value: impl Into<TreeLine>) -> Self {
         Self {
-            name,
-            value: Some(value),
+            name: name.into(),
+            value: Some(value.into()),
             children: Vec::new(),
             expanded: false,
             children_value_indent: 0,
@@ -46,9 +103,9 @@ impl PciNode {
         }
     }
 
-    pub fn new_collapsed(name: Line<'static>) -> Self {
+    pub fn new_collapsed(name: impl Into<TreeLine>) -> Self {
         Self {
-            name,
+            name: name.into(),
             value: None,
             children: Vec::new(),
             expanded: false,
@@ -57,12 +114,12 @@ impl PciNode {
         }
     }
 
-    pub fn add_child(&mut self, node: PciNode) {
+    pub fn add_child(&mut self, node: TreeNode) {
         self.children.push(node);
     }
 
     pub fn name_len(&self) -> usize {
-        self.name.to_string().len()
+        self.name.spans.iter().map(|s| s.text.len()).sum()
     }
 
     pub fn calculate_indents(&mut self, depth: usize) -> usize {
@@ -81,17 +138,18 @@ impl PciNode {
         my_needed_column
     }
 
-    pub fn render(&self, target_column: usize, depth: usize) -> Line<'static> {
+    // Returns a TreeLine representing the rendered node (name + padding + value)
+    pub fn render(&self, target_column: usize, depth: usize) -> TreeLine {
         if let Some(ref val) = self.value {
             let target_column = target_column.max(MIN_VALUE_COLUMN);
             let mut spans = self.name.spans.clone();
             let name_end_column = depth * 2 + self.name_len();
             if target_column > name_end_column {
-                spans.push(Span::raw(" ".repeat(target_column - name_end_column)));
+                spans.push(TreeSpan::raw(" ".repeat(target_column - name_end_column)));
             }
-            spans.push(Span::raw(" : "));
+            spans.push(TreeSpan::raw(" : "));
             spans.extend(val.spans.clone());
-            Line::from(spans)
+            TreeLine { spans }
         } else {
             self.name.clone()
         }
@@ -99,12 +157,12 @@ impl PciNode {
 }
 
 pub struct PciDevice {
-    pub nodes: Vec<PciNode>,
+    pub nodes: Vec<TreeNode>,
     pub children_value_indent: usize,
 }
 
 impl PciDevice {
-    pub fn new(mut nodes: Vec<PciNode>) -> Self {
+    pub fn new(mut nodes: Vec<TreeNode>) -> Self {
         let mut max = 0;
         for node in &mut nodes {
             let needed = node.calculate_indents(0);

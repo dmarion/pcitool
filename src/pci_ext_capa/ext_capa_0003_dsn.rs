@@ -1,6 +1,6 @@
 use crate::capabilities;
-use crate::tree::PciNode;
-use ratatui::text::Line;
+use crate::pci_device::PciCapa;
+use crate::tree::{TreeLine, TreeNode};
 
 capabilities! {
     ext {
@@ -19,16 +19,17 @@ capabilities! {
     }
 }
 
-fn serial_summary(_offset: u16, _version: u8, bytes: &[u8]) -> Option<Vec<PciNode>> {
-    let data = bytes.get(4..12)?;
-    let serial = data
+fn serial_summary(cap: &PciCapa) -> Option<Vec<TreeNode>> {
+    let serial_raw = cap.read_u64(0x04).ok()?;
+    let serial_bytes = serial_raw.to_le_bytes();
+    let serial = serial_bytes
         .iter()
         .rev()
         .map(|b| format!("{:02x}", b))
         .collect::<Vec<_>>()
         .join("-");
-    Some(vec![PciNode::with_value(
-        Line::from("Serial Number"),
-        Line::from(serial),
+    Some(vec![TreeNode::with_value(
+        TreeLine::from("Serial Number"),
+        TreeLine::from(serial),
     )])
 }

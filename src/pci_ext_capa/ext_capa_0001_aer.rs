@@ -1,8 +1,6 @@
 use crate::capabilities;
-use crate::pci_capa::{RegisterSize, read_raw};
-use crate::tree::PciNode;
-use ratatui::prelude::{Color, Span, Style};
-use ratatui::text::Line;
+use crate::pci_device::PciCapa;
+use crate::tree::{TreeColor, TreeLine, TreeNode, TreeSpan};
 
 capabilities! {
     ext {
@@ -512,11 +510,12 @@ capabilities! {
     }
 }
 
-fn summary(_offset: u16, _version: u8, bytes: &[u8]) -> Option<Vec<PciNode>> {
+fn summary(cap: &PciCapa) -> Option<Vec<TreeNode>> {
     let mut nodes = Vec::new();
+
     if let Some(node) = summarize_errors(
+        cap,
         "Uncorrectable Errors",
-        bytes,
         0x04,
         0x08,
         &[
@@ -547,8 +546,8 @@ fn summary(_offset: u16, _version: u8, bytes: &[u8]) -> Option<Vec<PciNode>> {
         nodes.push(node);
     }
     if let Some(node) = summarize_errors(
+        cap,
         "Correctable Errors",
-        bytes,
         0x10,
         0x14,
         &[
@@ -568,22 +567,19 @@ fn summary(_offset: u16, _version: u8, bytes: &[u8]) -> Option<Vec<PciNode>> {
 }
 
 fn summarize_errors(
+    cap: &PciCapa,
     label: &str,
-    bytes: &[u8],
     status_off: u16,
     mask_off: u16,
     table: &[(u8, &str)],
-) -> Option<PciNode> {
-    let status = read_raw(bytes, status_off, RegisterSize::Dword)? as u32;
-    let mask = read_raw(bytes, mask_off, RegisterSize::Dword).unwrap_or(0) as u32;
+) -> Option<TreeNode> {
+    let status = cap.read_u32(status_off as u64).ok()?;
+    let mask = cap.read_u32(mask_off as u64).unwrap_or(0);
     let active = status & !mask;
     if active == 0 {
-        return Some(PciNode::with_value(
-            Line::from(label.to_string()),
-            Line::from(vec![Span::styled(
-                "None",
-                Style::default().fg(Color::LightGreen),
-            )]),
+        return Some(TreeNode::with_value(
+            TreeLine::from(label.to_string()),
+            TreeLine::from(vec![TreeSpan::styled("None", TreeColor::Green)]),
         ));
     }
     let mut spans = Vec::new();
@@ -591,17 +587,14 @@ fn summarize_errors(
     for (bit, name) in table {
         if active & (1 << bit) != 0 {
             if !first {
-                spans.push(Span::raw(", "));
+                spans.push(TreeSpan::raw(", "));
             }
-            spans.push(Span::styled(
-                (*name).to_string(),
-                Style::default().fg(Color::LightRed),
-            ));
+            spans.push(TreeSpan::styled((*name).to_string(), TreeColor::Red));
             first = false;
         }
     }
-    Some(PciNode::with_value(
-        Line::from(label.to_string()),
-        Line::from(spans),
+    Some(TreeNode::with_value(
+        TreeLine::from(label.to_string()),
+        TreeLine::from(spans),
     ))
 }

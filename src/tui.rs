@@ -15,7 +15,7 @@ use ratatui::{
 };
 
 use crate::pci_device::{self, DeviceSummary};
-use crate::tree::{PciDevice, PciNode};
+use crate::tree::{PciDevice, TreeNode};
 
 struct App {
     devices: Vec<DeviceSummary>,
@@ -181,12 +181,12 @@ impl App {
 }
 
 fn update_node_at_visual_index<F>(
-    nodes: &mut [PciNode],
+    nodes: &mut [TreeNode],
     target_index: usize,
     updater: &mut F,
 ) -> Option<usize>
 where
-    F: FnMut(&mut PciNode),
+    F: FnMut(&mut TreeNode),
 {
     let mut current_index = 0;
     for node in nodes {
@@ -210,14 +210,14 @@ where
     Some(current_index)
 }
 
-fn toggle_node_at_visual_index(nodes: &mut [PciNode], target_index: usize) -> Option<usize> {
+fn toggle_node_at_visual_index(nodes: &mut [TreeNode], target_index: usize) -> Option<usize> {
     update_node_at_visual_index(nodes, target_index, &mut |node| {
         node.expanded = !node.expanded;
     })
 }
 
 fn set_node_expansion_at_visual_index(
-    nodes: &mut [PciNode],
+    nodes: &mut [TreeNode],
     target_index: usize,
     expand: bool,
 ) -> Option<usize> {
@@ -226,7 +226,7 @@ fn set_node_expansion_at_visual_index(
     })
 }
 
-fn visible_node_count(nodes: &[PciNode]) -> usize {
+fn visible_node_count(nodes: &[TreeNode]) -> usize {
     let mut count = 0;
     for node in nodes {
         count += 1;
@@ -238,7 +238,7 @@ fn visible_node_count(nodes: &[PciNode]) -> usize {
 }
 
 fn flatten_nodes<'a>(
-    nodes: &'a [PciNode],
+    nodes: &'a [TreeNode],
     depth: usize,
     parent_column: usize,
     current_column: usize,
@@ -263,15 +263,18 @@ fn flatten_nodes<'a>(
         } else {
             current_column
         };
-        // render returns target_column - depth*2.
-        // Wait, render should handle the prefix too?
-        // No, depth*2 is part of prefix.
-        // Prefix is depth*2 + 4 chars.
-        // name_pos = depth*2 + 4 + name_len.
-        // We want name_pos + padding = target_column + 4.
-        // So padding = target_column - depth*2 - name_len.
-        // It's the same!
-        spans.extend(node.render(target_column, depth).spans.clone());
+
+        let rendered = node.render(target_column, depth);
+        spans.extend(rendered.spans.into_iter().map(|s| {
+            let style = match s.color {
+                crate::tree::TreeColor::Default => Style::default(),
+                crate::tree::TreeColor::Red => Style::default().fg(Color::LightRed),
+                crate::tree::TreeColor::Green => Style::default().fg(Color::LightGreen),
+                crate::tree::TreeColor::Yellow => Style::default().fg(Color::LightYellow),
+            };
+            Span::styled(s.text, style)
+        }));
+
         lines.push(ListItem::new(Line::from(spans)));
 
         if node.expanded {

@@ -1,8 +1,6 @@
 use crate::capabilities;
-use crate::pci_capa::{RegisterSize, read_raw};
-use crate::tree::PciNode;
-use ratatui::prelude::{Color, Span, Style};
-use ratatui::text::Line;
+use crate::pci_device::PciCapa;
+use crate::tree::{TreeColor, TreeLine, TreeNode, TreeSpan};
 
 const TX_PRESETS: &[(u64, &str)] = &[
     (0x0, "P0"),
@@ -245,15 +243,12 @@ capabilities! {
     }
 }
 
-fn summary(_offset: u16, _version: u8, bytes: &[u8]) -> Option<Vec<PciNode>> {
-    let status = read_raw(bytes, 0x08, RegisterSize::Dword).unwrap_or(0) as u32;
+fn summary(cap: &PciCapa) -> Option<Vec<TreeNode>> {
+    let status = cap.read_u32(0x08).unwrap_or(0);
     let node = if status == 0 {
-        PciNode::with_value(
-            Line::from("Lane Errors"),
-            Line::from(vec![Span::styled(
-                "None",
-                Style::default().fg(Color::LightGreen),
-            )]),
+        TreeNode::with_value(
+            TreeLine::from("Lane Errors"),
+            TreeLine::from(vec![TreeSpan::styled("None", TreeColor::Green)]),
         )
     } else {
         let mut lanes = Vec::new();
@@ -262,11 +257,11 @@ fn summary(_offset: u16, _version: u8, bytes: &[u8]) -> Option<Vec<PciNode>> {
                 lanes.push(i.to_string());
             }
         }
-        PciNode::with_value(
-            Line::from("Lane Errors"),
-            Line::from(vec![Span::styled(
+        TreeNode::with_value(
+            TreeLine::from("Lane Errors"),
+            TreeLine::from(vec![TreeSpan::styled(
                 format!("Lane(s) {}", lanes.join(", ")),
-                Style::default().fg(Color::LightRed),
+                TreeColor::Red,
             )]),
         )
     };

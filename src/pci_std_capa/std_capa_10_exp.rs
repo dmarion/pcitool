@@ -1,8 +1,6 @@
 use crate::capabilities;
-use crate::pci_capa::{RegisterSize, read_raw};
-use crate::tree::PciNode;
-use ratatui::style::{Color, Style};
-use ratatui::text::{Line, Span};
+use crate::pci_device::PciCapa;
+use crate::tree::{TreeColor, TreeLine, TreeNode, TreeSpan};
 
 capabilities! {
     std {
@@ -509,13 +507,12 @@ capabilities! {
     }
 }
 
-fn pcie_summary(_off: u8, bytes: &[u8], _config: &[u8]) -> Option<Vec<PciNode>> {
+fn pcie_summary(cap: &PciCapa) -> Option<Vec<TreeNode>> {
     let mut nodes = Vec::new();
     let mut link_cap_speed: Option<u8> = None;
     let mut link_cap_width: Option<u8> = None;
 
-    if let Some(raw) = read_raw(bytes, 0x0a, RegisterSize::Word) {
-        let status = raw as u16;
+    if let Ok(status) = cap.read_u16(0x0a) {
         let mut flags: Vec<(&'static str, bool)> = Vec::new();
         if status & (1 << 0) != 0 {
             flags.push(("CorrErr", true));
@@ -536,33 +533,36 @@ fn pcie_summary(_off: u8, bytes: &[u8], _config: &[u8]) -> Option<Vec<PciNode>> 
             flags.push(("TransPend", false));
         }
         let summary = if flags.is_empty() {
-            Line::from("none")
+            TreeLine::from("none")
         } else {
             let mut spans = Vec::new();
             for (idx, (label, is_error)) in flags.iter().enumerate() {
                 if idx > 0 {
-                    spans.push(Span::raw(", "));
+                    spans.push(TreeSpan::raw(", "));
                 }
                 if *is_error {
-                    spans.push(Span::styled(*label, Style::default().fg(Color::LightRed)));
+                    spans.push(TreeSpan::styled(*label, TreeColor::Red));
                 } else {
-                    spans.push(Span::raw(*label));
+                    spans.push(TreeSpan::raw(*label));
                 }
             }
-            Line::from(spans)
+            TreeLine::from(spans)
         };
-        nodes.push(PciNode::with_value(Line::from("Device Status"), summary));
+        nodes.push(TreeNode::with_value(
+            TreeLine::from("Device Status"),
+            summary,
+        ));
     }
 
-    if let Some(raw) = read_raw(bytes, 0x0c, RegisterSize::Dword) {
+    if let Ok(raw) = cap.read_u32(0x0c) {
         let speed = (raw & 0x0f) as u8;
         let width = ((raw >> 4) & 0x3f) as u8;
         let aspm = ((raw >> 10) & 0x03) as u8;
         link_cap_speed = Some(speed);
         link_cap_width = Some(width);
-        nodes.push(PciNode::with_value(
-            Line::from("Link Capabilities"),
-            Line::from(format!(
+        nodes.push(TreeNode::with_value(
+            TreeLine::from("Link Capabilities"),
+            TreeLine::from(format!(
                 "{} GT/s x{}, ASPM {}",
                 link_speed_name(speed),
                 width,
@@ -571,25 +571,25 @@ fn pcie_summary(_off: u8, bytes: &[u8], _config: &[u8]) -> Option<Vec<PciNode>> 
         ));
     }
 
-    if let Some(raw) = read_raw(bytes, 0x12, RegisterSize::Word) {
-        let speed = (raw & 0x0f) as u8;
-        let width = ((raw >> 4) & 0x3f) as u8;
+    if let Ok(status) = cap.read_u16(0x12) {
+        let speed = (status & 0x0f) as u8;
+        let width = ((status >> 4) & 0x3f) as u8;
         let speed_style = match link_cap_speed {
-            Some(cap) if speed < cap => Style::default().fg(Color::LightYellow),
-            Some(_) => Style::default().fg(Color::LightGreen),
-            None => Style::default(),
+            Some(cap) if speed < cap => TreeColor::Yellow,
+            Some(_) => TreeColor::Green,
+            None => TreeColor::Default,
         };
         let width_style = match link_cap_width {
-            Some(cap) if width < cap => Style::default().fg(Color::LightYellow),
-            Some(_) => Style::default().fg(Color::LightGreen),
-            None => Style::default(),
+            Some(cap) if width < cap => TreeColor::Yellow,
+            Some(_) => TreeColor::Green,
+            None => TreeColor::Default,
         };
-        let line = Line::from(vec![
-            Span::styled(format!("{} GT/s", link_speed_name(speed)), speed_style),
-            Span::raw(" "),
-            Span::styled(format!("x{}", width), width_style),
+        let line = TreeLine::from(vec![
+            TreeSpan::styled(format!("{} GT/s", link_speed_name(speed)), speed_style),
+            TreeSpan::raw(" "),
+            TreeSpan::styled(format!("x{}", width), width_style),
         ]);
-        nodes.push(PciNode::with_value(Line::from("Link Status"), line));
+        nodes.push(TreeNode::with_value(TreeLine::from("Link Status"), line));
     }
 
     if nodes.is_empty() { None } else { Some(nodes) }

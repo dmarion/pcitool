@@ -1,8 +1,6 @@
 use crate::capabilities;
-use crate::pci_capa::{RegisterSize, read_raw};
-use crate::tree::PciNode;
-use ratatui::prelude::{Color, Span, Style};
-use ratatui::text::Line;
+use crate::pci_device::PciCapa;
+use crate::tree::{TreeColor, TreeLine, TreeNode, TreeSpan};
 
 const TX_PRESETS: &[(u64, &str)] = &[
     (0x0, "P0"),
@@ -250,8 +248,8 @@ capabilities! {
     }
 }
 
-fn summary(_offset: u16, _version: u8, bytes: &[u8]) -> Option<Vec<PciNode>> {
-    let status = read_raw(bytes, 0x0c, RegisterSize::Dword)?;
+fn summary(cap: &PciCapa) -> Option<Vec<TreeNode>> {
+    let status = cap.read_u32(0x0c).ok()?;
     let eq_complete = status & 0x1 != 0;
     let phase1 = status & 0x2 != 0;
     let phase2 = status & 0x4 != 0;
@@ -267,18 +265,18 @@ fn summary(_offset: u16, _version: u8, bytes: &[u8]) -> Option<Vec<PciNode>> {
 
     for (idx, (label, val)) in fields.iter().enumerate() {
         if idx > 0 {
-            spans.push(Span::raw(" "));
+            spans.push(TreeSpan::raw(" "));
         }
-        spans.push(Span::raw(*label));
+        spans.push(TreeSpan::raw(*label));
         if *val {
-            spans.push(Span::styled("+", Style::default().fg(Color::LightGreen)));
+            spans.push(TreeSpan::styled("+", TreeColor::Green));
         } else {
-            spans.push(Span::styled("-", Style::default().fg(Color::LightRed)));
+            spans.push(TreeSpan::styled("-", TreeColor::Red));
         }
     }
 
-    Some(vec![PciNode::with_value(
-        Line::from("Physical Layer 32.0 GT/s"),
-        Line::from(spans),
+    Some(vec![TreeNode::with_value(
+        TreeLine::from("Physical Layer 32.0 GT/s"),
+        TreeLine::from(spans),
     )])
 }
