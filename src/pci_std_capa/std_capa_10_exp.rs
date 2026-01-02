@@ -3,14 +3,16 @@ use crate::pci_device::PciCapa;
 use crate::tree::{TreeColor, TreeLine, TreeNode, TreeSpan};
 
 capabilities! {
-    std {
+    {
         id: 0x10,
         name: "PCI Express",
+        size: 60,
         summary: pcie_summary,
         registers: [
             {
                 name: "Capabilities",
                 offset: 0x02,
+                id: CAPS,
                 size: Word,
                 fields: [
                     { name: "PCIe Capability Version", lsb: 0, bits: 4 },
@@ -36,6 +38,7 @@ capabilities! {
             {
                 name: "Device Capabilities",
                 offset: 0x04,
+                id: DEVICE_CAPS,
                 size: Dword,
                 fields: [
                     {
@@ -78,6 +81,7 @@ capabilities! {
             {
                 name: "Device Control",
                 offset: 0x08,
+                id: DEVICE_CTRL,
                 size: Word,
                 fields: [
                     { name: "Correctable Error Reporting Enable", lsb: 0, bits: 1 },
@@ -119,6 +123,7 @@ capabilities! {
             {
                 name: "Device Status",
                 offset: 0x0a,
+                id: DEVICE_STAT,
                 size: Word,
                 fields: [
                     { name: "Correctable Error Detected", lsb: 0, bits: 1 },
@@ -132,6 +137,7 @@ capabilities! {
             {
                 name: "Link Capabilities",
                 offset: 0x0c,
+                id: LINK_CAPS,
                 size: Dword,
                 fields: [
                     {
@@ -173,6 +179,7 @@ capabilities! {
             {
                 name: "Link Control",
                 offset: 0x10,
+                id: LINK_CTRL,
                 size: Word,
                 fields: [
                     {
@@ -209,6 +216,7 @@ capabilities! {
             {
                 name: "Link Status",
                 offset: 0x12,
+                id: LINK_STAT,
                 size: Word,
                 fields: [
                     {
@@ -237,6 +245,7 @@ capabilities! {
             {
                 name: "Slot Capabilities",
                 offset: 0x14,
+                id: SLOT_CAPS,
                 size: Dword,
                 fields: [
                     { name: "Attention Button Present", lsb: 0, bits: 1 },
@@ -256,6 +265,7 @@ capabilities! {
             {
                 name: "Slot Control",
                 offset: 0x18,
+                id: SLOT_CTRL,
                 size: Word,
                 fields: [
                     { name: "Attention Button Pressed Enable", lsb: 0, bits: 1 },
@@ -292,6 +302,7 @@ capabilities! {
             {
                 name: "Slot Status",
                 offset: 0x1a,
+                id: SLOT_STAT,
                 size: Word,
                 fields: [
                     { name: "Attention Button Pressed", lsb: 0, bits: 1 },
@@ -324,6 +335,7 @@ capabilities! {
             {
                 name: "Root Control",
                 offset: 0x1c,
+                id: ROOT_CTRL,
                 size: Word,
                 fields: [
                     { name: "System Error on Correctable Error", lsb: 0, bits: 1 },
@@ -336,6 +348,7 @@ capabilities! {
             {
                 name: "Root Capabilities",
                 offset: 0x1e,
+                id: ROOT_CAPS,
                 size: Word,
                 fields: [
                     { name: "CRS Software Visibility", lsb: 0, bits: 1 }
@@ -344,6 +357,7 @@ capabilities! {
             {
                 name: "Root Status",
                 offset: 0x20,
+                id: ROOT_STAT,
                 size: Dword,
                 fields: [
                     { name: "PME Requester ID", lsb: 0, bits: 16 },
@@ -354,6 +368,7 @@ capabilities! {
             {
                 name: "Device Capabilities 2",
                 offset: 0x24,
+                id: DEVICE_CAPS2,
                 size: Dword,
                 fields: [
                     { name: "Completion Timeout Ranges", lsb: 0, bits: 4 },
@@ -391,6 +406,7 @@ capabilities! {
             {
                 name: "Device Control 2",
                 offset: 0x28,
+                id: DEVICE_CTRL2,
                 size: Word,
                 fields: [
                     { name: "Completion Timeout Value", lsb: 0, bits: 4 },
@@ -419,12 +435,14 @@ capabilities! {
             {
                 name: "Device Status 2",
                 offset: 0x2a,
+                id: DEVICE_STAT2,
                 size: Word,
                 fields: []
             },
             {
                 name: "Link Capabilities 2",
                 offset: 0x2c,
+                id: LINK_CAPS2,
                 size: Dword,
                 fields: [
                     { name: "Supported Link Speeds Vector", lsb: 1, bits: 7 },
@@ -441,6 +459,7 @@ capabilities! {
             {
                 name: "Link Control 2",
                 offset: 0x30,
+                id: LINK_CTRL2,
                 size: Word,
                 fields: [
                     { name: "Target Link Speed", lsb: 0, bits: 4 },
@@ -456,6 +475,7 @@ capabilities! {
             {
                 name: "Link Status 2",
                 offset: 0x32,
+                id: LINK_STAT2,
                 size: Word,
                 fields: [
                     { name: "Current De-emphasis Level", lsb: 0, bits: 1 },
@@ -476,6 +496,7 @@ capabilities! {
             {
                 name: "Slot Capabilities 2",
                 offset: 0x34,
+                id: SLOT_CAPS2,
                 size: Dword,
                 fields: [
                     { name: "In-Band PD Disable Supported", lsb: 0, bits: 1 },
@@ -494,12 +515,14 @@ capabilities! {
             {
                 name: "Slot Control 2",
                 offset: 0x38,
+                id: SLOT_CTRL2,
                 size: Word,
                 fields: []
             },
             {
                 name: "Slot Status 2",
                 offset: 0x3a,
+                id: SLOT_STAT2,
                 size: Word,
                 fields: []
             },
@@ -512,7 +535,7 @@ fn pcie_summary(cap: &PciCapa) -> Option<Vec<TreeNode>> {
     let mut link_cap_speed: Option<u8> = None;
     let mut link_cap_width: Option<u8> = None;
 
-    if let Ok(status) = cap.read_u16(0x0a) {
+    if let Ok(status) = cap.read_u16(u64::from(DEVICE_STAT)) {
         let mut flags: Vec<(&'static str, bool)> = Vec::new();
         if status & (1 << 0) != 0 {
             flags.push(("CorrErr", true));
@@ -554,7 +577,7 @@ fn pcie_summary(cap: &PciCapa) -> Option<Vec<TreeNode>> {
         ));
     }
 
-    if let Ok(raw) = cap.read_u32(0x0c) {
+    if let Ok(raw) = cap.read_u32(u64::from(LINK_CAPS)) {
         let speed = (raw & 0x0f) as u8;
         let width = ((raw >> 4) & 0x3f) as u8;
         let aspm = ((raw >> 10) & 0x03) as u8;
@@ -571,7 +594,7 @@ fn pcie_summary(cap: &PciCapa) -> Option<Vec<TreeNode>> {
         ));
     }
 
-    if let Ok(status) = cap.read_u16(0x12) {
+    if let Ok(status) = cap.read_u16(u64::from(LINK_STAT)) {
         let speed = (status & 0x0f) as u8;
         let width = ((status >> 4) & 0x3f) as u8;
         let speed_style = match link_cap_speed {

@@ -5,7 +5,7 @@ use std::io::Read;
 use std::os::unix::fs::FileExt;
 use std::path::Path;
 
-use crate::pci_capa::{self, ExtCapEntry, StdCapEntry};
+use crate::pci_capa::{self, CapaSize, ExtCapEntry, StdCapEntry};
 use crate::pci_classes;
 use crate::pci_config_hdr::PciConfigHdr;
 use crate::pci_ids;
@@ -134,28 +134,20 @@ impl PciConfig {
             })?;
         Ok(())
     }
-
-    #[allow(dead_code)]
-    pub fn write_u32(&self, offset: u64, value: u32) -> Result<()> {
-        self.file
-            .write_at(&value.to_le_bytes(), offset)
-            .with_context(|| {
-                format!("writing 0x{:08x} to 0x{:x} in {}", value, offset, self.path)
-            })?;
-        Ok(())
-    }
 }
 
 pub struct PciCapa<'a> {
     config: &'a PciConfig,
     base_offset: u64,
+    size: u16,
 }
 
 impl<'a> PciCapa<'a> {
-    pub fn new(config: &'a PciConfig, base_offset: u64) -> Self {
+    pub fn new(config: &'a PciConfig, base_offset: u64, size: u16) -> Self {
         Self {
             config,
             base_offset,
+            size,
         }
     }
 
@@ -175,34 +167,54 @@ impl<'a> PciCapa<'a> {
         self.config.read_u64(self.base_offset + offset)
     }
 
+    pub fn read_cfg_u8(&self, offset: u64) -> Result<u8> {
+        self.config.read_u8(offset)
+    }
+
+    pub fn read_cfg_u16(&self, offset: u64) -> Result<u16> {
+        self.config.read_u16(offset)
+    }
+
+    pub fn read_cfg_u32(&self, offset: u64) -> Result<u32> {
+        self.config.read_u32(offset)
+    }
+
+    pub fn pcie_cap_offset(&self) -> Option<u64> {
+        let mut ptr = self.read_cfg_u8(0x34).ok()? as u64;
+        if ptr == 0 {
+            return None;
+        }
+        for _ in 0..48 {
+            if ptr < 0x40 || ptr > 0xfc {
+                break;
+            }
+            let id = self.read_cfg_u8(ptr).ok()?;
+            if id == 0x10 {
+                return Some(ptr);
+            }
+            let next = self.read_cfg_u8(ptr + 1).ok()? as u64;
+            if next == 0 || next == ptr {
+                break;
+            }
+            ptr = next;
+        }
+        None
+    }
+
+    pub fn max_link_width(&self) -> Option<u16> {
+        let pcie_off = self.pcie_cap_offset()?;
+        let link_cap = self.read_cfg_u32(pcie_off + 0x0c).ok()?;
+        let width = ((link_cap >> 4) & 0x3f) as u16;
+        (width > 0).then_some(width)
+    }
+
     pub fn write_u16(&self, offset: u64, value: u16) -> Result<()> {
         self.config.write_u16(self.base_offset + offset, value)
     }
 
-    #[allow(dead_code)]
-    pub fn write_u32(&self, offset: u64, value: u32) -> Result<()> {
-        self.config.write_u32(self.base_offset + offset, value)
+    pub fn size(&self) -> u16 {
+        self.size
     }
-}
-
-#[allow(dead_code)]
-pub fn read_pci_u16(address: &str, offset: u64) -> Result<u16> {
-    PciConfig::open(address, false)?.read_u16(offset)
-}
-
-#[allow(dead_code)]
-pub fn read_pci_u32(address: &str, offset: u64) -> Result<u32> {
-    PciConfig::open(address, false)?.read_u32(offset)
-}
-
-#[allow(dead_code)]
-pub fn write_pci_u16(address: &str, offset: u64, value: u16) -> Result<()> {
-    PciConfig::open(address, true)?.write_u16(offset, value)
-}
-
-#[allow(dead_code)]
-pub fn write_pci_u32(address: &str, offset: u64, value: u32) -> Result<()> {
-    PciConfig::open(address, true)?.write_u32(offset, value)
 }
 
 fn device_tree_chain(address: &str) -> Option<Vec<String>> {
@@ -267,8 +279,7 @@ fn current_link_status(header: &PciConfigHdr, config: &[u8]) -> (Option<u8>, Opt
 
 pub fn get_device_tree(summary: &DeviceSummary) -> Result<PciDevice> {
     let config_handle = PciConfig::open(&summary.address, true)
-        .ok()
-        .or_else(|| PciConfig::open(&summary.address, false).ok());
+        .or_else(|_| PciConfig::open(&summary.address, false))?;
     let config = read_config(&summary.address)?;
     let header = PciConfigHdr::parse(&config)?;
     let mut items = Vec::new();
@@ -341,31 +352,36 @@ pub fn get_device_tree(summary: &DeviceSummary) -> Result<PciDevice> {
 
     let mut std_caps = scan_standard_capabilities(&header, &config);
     std_caps.sort_by_key(|(off, _, _)| *off);
-    let mut ext_caps = scan_extended_capabilities(&config);
+    let mut ext_caps = scan_extended_capabilities(&config_handle, &config);
     ext_caps.sort_by_key(|(off, _, _, _)| *off);
 
     let mut summary_nodes = Vec::new();
-    if let Some(cfg) = config_handle.as_ref() {
-        for (off, id, _) in &std_caps {
-            if let Some(cap) = pci_capa::STD_CAP_REGISTRY.iter().find(|cap| cap.id == *id) {
-                if let Some(f) = cap.summary {
-                    let pci_capa = PciCapa::new(cfg, *off as u64);
-                    if let Some(nodes) = f(&pci_capa) {
-                        summary_nodes.extend(nodes);
-                    }
+    for (off, id, len) in &std_caps {
+        if let Some(cap) = pci_capa::STD_CAP_REGISTRY
+            .iter()
+            .find(|cap| cap.id == u16::from(*id))
+        {
+            debug_assert!(!cap.is_extended);
+            if let Some(f) = cap.summary {
+                let size = resolve_capa_size(&config_handle, *off as u64, cap.size, *len as u16);
+                let pci_capa = PciCapa::new(&config_handle, *off as u64, size);
+                if let Some(nodes) = f(&pci_capa) {
+                    summary_nodes.extend(nodes);
                 }
             }
         }
-        for (off, ver, id, _) in &ext_caps {
-            if let Some(cap) = pci_capa::EXT_CAP_REGISTRY
-                .iter()
-                .find(|cap| cap.id == *id && cap.version == *ver)
-            {
-                if let Some(f) = cap.summary {
-                    let pci_capa = PciCapa::new(cfg, *off as u64);
-                    if let Some(nodes) = f(&pci_capa) {
-                        summary_nodes.extend(nodes);
-                    }
+    }
+    for (off, ver, id, len) in &ext_caps {
+        if let Some(cap) = pci_capa::EXT_CAP_REGISTRY
+            .iter()
+            .find(|cap| cap.id == *id && cap.version == Some(*ver))
+        {
+            debug_assert!(cap.is_extended);
+            if let Some(f) = cap.summary {
+                let size = resolve_capa_size(&config_handle, *off as u64, cap.size, *len);
+                let pci_capa = PciCapa::new(&config_handle, *off as u64, size);
+                if let Some(nodes) = f(&pci_capa) {
+                    summary_nodes.extend(nodes);
                 }
             }
         }
@@ -379,13 +395,13 @@ pub fn get_device_tree(summary: &DeviceSummary) -> Result<PciDevice> {
 
     if !std_caps.is_empty() {
         let mut caps_node = TreeNode::new(TreeLine::from("Capabilities:"));
-        caps_node.children = build_standard_caps_nodes(config_handle.as_ref(), &std_caps);
+        caps_node.children = build_standard_caps_nodes(&config_handle, &std_caps);
         items.push(caps_node);
     }
 
     if !ext_caps.is_empty() {
         let mut ext_caps_node = TreeNode::new(TreeLine::from("Extended Capabilities:"));
-        ext_caps_node.children = build_extended_caps_nodes(config_handle.as_ref(), &ext_caps);
+        ext_caps_node.children = build_extended_caps_nodes(&config_handle, &ext_caps);
         items.push(ext_caps_node);
     }
 
@@ -480,53 +496,67 @@ fn scan_standard_capabilities(header: &PciConfigHdr, config: &[u8]) -> Vec<StdCa
     caps
 }
 
-fn build_standard_caps_nodes(config: Option<&PciConfig>, caps: &[StdCapEntry]) -> Vec<TreeNode> {
+fn build_standard_caps_nodes(config: &PciConfig, caps: &[StdCapEntry]) -> Vec<TreeNode> {
     let mut nodes = Vec::new();
     for (off, id, len) in caps {
-        let pci_capa = config.map(|c| PciCapa::new(c, *off as u64));
-        let (name, children) =
-            if let Some(cap) = pci_capa::STD_CAP_REGISTRY.iter().find(|cap| cap.id == *id) {
-                let mut children = Vec::new();
-                pci_capa::print_registers(
-                    cap.registers,
-                    |reg_off, size| {
-                        if let Some(c) = &pci_capa {
-                            match size {
-                                pci_capa::RegisterSize::Byte => {
-                                    c.read_u8(reg_off as u64).ok().map(u64::from)
-                                }
-                                pci_capa::RegisterSize::Word => {
-                                    c.read_u16(reg_off as u64).ok().map(u64::from)
-                                }
-                                pci_capa::RegisterSize::Dword => {
-                                    c.read_u32(reg_off as u64).ok().map(u64::from)
-                                }
-                                pci_capa::RegisterSize::Qword => c.read_u64(reg_off as u64).ok(),
-                            }
-                        } else {
-                            None
-                        }
-                    },
-                    2,
-                    2,
-                    &mut children,
-                );
-                (cap.name.to_string(), children)
-            } else {
-                (
-                    format!("Unknown (0x{id:02x})"),
-                    vec![TreeNode::with_value(
-                        TreeLine::from("  Offset"),
-                        TreeLine::from(format!("0x{off:02x}")),
-                    )],
-                )
-            };
+        let (name, size, regs) = if let Some(cap) = pci_capa::STD_CAP_REGISTRY
+            .iter()
+            .find(|cap| cap.id == u16::from(*id))
+        {
+            debug_assert!(!cap.is_extended);
+            (
+                cap.name.to_string(),
+                resolve_capa_size(config, *off as u64, cap.size, *len as u16),
+                Some(cap.registers),
+            )
+        } else {
+            (format!("Unknown (0x{id:02x})"), *len as u16, None)
+        };
+
+        let pci_capa = PciCapa::new(config, *off as u64, size);
+        let mut children = Vec::new();
+        if let Some(regs) = regs {
+            pci_capa::print_registers(
+                regs,
+                |reg_off, size| match size {
+                    pci_capa::RegisterSize::Byte => {
+                        pci_capa.read_u8(reg_off as u64).ok().map(u64::from)
+                    }
+                    pci_capa::RegisterSize::Word => {
+                        pci_capa.read_u16(reg_off as u64).ok().map(u64::from)
+                    }
+                    pci_capa::RegisterSize::Dword => {
+                        pci_capa.read_u32(reg_off as u64).ok().map(u64::from)
+                    }
+                    pci_capa::RegisterSize::Qword => pci_capa.read_u64(reg_off as u64).ok(),
+                },
+                pci_capa.size(),
+                2,
+                &mut children,
+            );
+        }
 
         let mut cap_node = TreeNode::new_collapsed(TreeLine::from(name));
         cap_node.children = children;
 
+        let padding = *len as i32 - pci_capa.size() as i32;
         let mut data_node = TreeNode::new_collapsed(TreeLine::from("Data"));
-        data_node.children = render_cap_data_nodes(pci_capa.as_ref(), *len as u16);
+        let mut data_children = vec![
+            TreeNode::with_value(
+                TreeLine::from("  Offset"),
+                TreeLine::from(format!("0x{off:02x}")),
+            ),
+            TreeNode::with_value(
+                TreeLine::from("  Size"),
+                TreeLine::from(format!("{} bytes", pci_capa.size())),
+            ),
+            TreeNode::with_value(
+                TreeLine::from("  Padding"),
+                TreeLine::from(format!("{padding} bytes")),
+            ),
+        ];
+        data_children.extend(render_cap_data_nodes(&pci_capa));
+        data_node.children = data_children;
         cap_node.add_child(data_node);
 
         nodes.push(cap_node);
@@ -541,25 +571,63 @@ fn read_u16_le(bytes: &[u8], offset: usize) -> Option<u16> {
         .map(u16::from_le_bytes)
 }
 
-fn read_ext_block(config: &[u8], offset: u16) -> Option<(ExtCapEntry, usize)> {
+fn resolve_capa_size(config: &PciConfig, base_offset: u64, size: CapaSize, fallback: u16) -> u16 {
+    match size {
+        CapaSize::Fixed(size) => size,
+        CapaSize::Dynamic(get_size) => {
+            let pci_capa = PciCapa::new(config, base_offset, fallback);
+            get_size(&pci_capa).unwrap_or(fallback)
+        }
+    }
+}
+
+fn read_ext_block(
+    config_handle: &PciConfig,
+    config: &[u8],
+    offset: u16,
+) -> Option<(ExtCapEntry, usize)> {
     let start = offset as usize;
     let header_bytes: [u8; 4] = config.get(start..start + ECH_BYTES)?.try_into().ok()?;
     let header_word = u32::from_le_bytes(header_bytes);
     let next = ((header_word >> 20) & 0x0fff) as usize;
     let version = ((header_word >> 16) & 0x0f) as u8;
     let id = (header_word & 0xffff) as u16;
-    if id == 0 || version == 0 || version > 4 {
+    if id == 0 || version == 0 {
         return None;
     }
-    let end = if next > start && next <= config.len() {
-        next
+
+    let mut length = if next > start {
+        (next - start) as u16
     } else {
-        config.len()
+        0
     };
-    Some(((offset, version, id, (end - start) as u16), next))
+
+    if let Some(cap) = pci_capa::EXT_CAP_REGISTRY
+        .iter()
+        .find(|c| c.id == id && c.version == Some(version))
+    {
+        debug_assert!(cap.is_extended);
+        length = resolve_capa_size(config_handle, offset as u64, cap.size, length);
+    }
+
+    if length == 0 {
+        if next == 0 {
+            let available = config.len().saturating_sub(start);
+            length = available as u16;
+        } else {
+            return None;
+        }
+    }
+
+    // Validation
+    if next != 0 && (next <= start || next > config.len()) {
+        return None;
+    }
+
+    Some(((offset, version, id, length), next))
 }
 
-fn scan_extended_capabilities(config: &[u8]) -> Vec<ExtCapEntry> {
+fn scan_extended_capabilities(config_handle: &PciConfig, config: &[u8]) -> Vec<ExtCapEntry> {
     let mut caps = Vec::new();
     if config.len() < ECS_OFFSET + ECH_BYTES {
         return caps;
@@ -570,12 +638,12 @@ fn scan_extended_capabilities(config: &[u8]) -> Vec<ExtCapEntry> {
         if !visited.insert(offset) {
             break;
         }
-        let (block, next) = match read_ext_block(config, offset) {
+        let (block, next) = match read_ext_block(config_handle, config, offset) {
             Some(entry) => entry,
             None => break,
         };
         caps.push(block);
-        if next == 0 || next < ECS_OFFSET || next > config.len() {
+        if next == 0 {
             break;
         }
         offset = next as u16;
@@ -583,55 +651,86 @@ fn scan_extended_capabilities(config: &[u8]) -> Vec<ExtCapEntry> {
     caps
 }
 
-fn build_extended_caps_nodes(config: Option<&PciConfig>, caps: &[ExtCapEntry]) -> Vec<TreeNode> {
+fn ext_padding(config: &PciConfig, offset: u16, size: u16) -> i32 {
+    let header = match config.read_u32(offset as u64) {
+        Ok(val) => val,
+        Err(_) => return 0,
+    };
+    let next = ((header >> 20) & 0x0fff) as i32;
+    if next == 0 {
+        return 0;
+    }
+    let len = next - offset as i32;
+    len - size as i32
+}
+
+fn build_extended_caps_nodes(config: &PciConfig, caps: &[ExtCapEntry]) -> Vec<TreeNode> {
     let mut nodes = Vec::new();
     for (offset, version, id, len) in caps {
-        let pci_capa = config.map(|c| PciCapa::new(c, *offset as u64));
-        let (title, children) = if let Some(cap) = pci_capa::EXT_CAP_REGISTRY
+        let (title, size, regs, show_version) = if let Some(cap) = pci_capa::EXT_CAP_REGISTRY
             .iter()
-            .find(|cap| cap.id == *id && cap.version == *version)
+            .find(|cap| cap.id == *id && cap.version == Some(*version))
         {
-            let mut children = Vec::new();
+            debug_assert!(cap.is_extended);
+            (
+                format!("{} (v{})", cap.name, cap.version.unwrap_or(*version)),
+                resolve_capa_size(config, *offset as u64, cap.size, *len),
+                Some(cap.registers),
+                false,
+            )
+        } else {
+            (format!("Unknown (0x{id:04x})"), *len, None, true)
+        };
+
+        let pci_capa = PciCapa::new(config, *offset as u64, size);
+        let mut children = Vec::new();
+        if let Some(regs) = regs {
             pci_capa::print_registers(
-                cap.registers,
-                |reg_off, size| {
-                    if let Some(c) = &pci_capa {
-                        match size {
-                            pci_capa::RegisterSize::Byte => {
-                                c.read_u8(reg_off as u64).ok().map(u64::from)
-                            }
-                            pci_capa::RegisterSize::Word => {
-                                c.read_u16(reg_off as u64).ok().map(u64::from)
-                            }
-                            pci_capa::RegisterSize::Dword => {
-                                c.read_u32(reg_off as u64).ok().map(u64::from)
-                            }
-                            pci_capa::RegisterSize::Qword => c.read_u64(reg_off as u64).ok(),
-                        }
-                    } else {
-                        None
+                regs,
+                |reg_off, size| match size {
+                    pci_capa::RegisterSize::Byte => {
+                        pci_capa.read_u8(reg_off as u64).ok().map(u64::from)
                     }
+                    pci_capa::RegisterSize::Word => {
+                        pci_capa.read_u16(reg_off as u64).ok().map(u64::from)
+                    }
+                    pci_capa::RegisterSize::Dword => {
+                        pci_capa.read_u32(reg_off as u64).ok().map(u64::from)
+                    }
+                    pci_capa::RegisterSize::Qword => pci_capa.read_u64(reg_off as u64).ok(),
                 },
+                pci_capa.size(),
                 3,
-                2,
                 &mut children,
             );
-            (format!("{} (v{})", cap.name, cap.version), children)
-        } else {
-            (
-                format!("Unknown (0x{id:04x})"),
-                vec![TreeNode::with_value(
-                    TreeLine::from("  Version"),
-                    TreeLine::from(version.to_string()),
-                )],
-            )
-        };
+        } else if show_version {
+            children.push(TreeNode::with_value(
+                TreeLine::from("  Version"),
+                TreeLine::from(version.to_string()),
+            ));
+        }
 
         let mut cap_node = TreeNode::new_collapsed(TreeLine::from(title));
         cap_node.children = children;
 
+        let padding = ext_padding(config, *offset, pci_capa.size());
         let mut data_node = TreeNode::new_collapsed(TreeLine::from("Data"));
-        data_node.children = render_cap_data_nodes(pci_capa.as_ref(), *len);
+        let mut data_children = vec![
+            TreeNode::with_value(
+                TreeLine::from("  Offset"),
+                TreeLine::from(format!("0x{offset:03x}")),
+            ),
+            TreeNode::with_value(
+                TreeLine::from("  Size"),
+                TreeLine::from(format!("{} bytes", pci_capa.size())),
+            ),
+            TreeNode::with_value(
+                TreeLine::from("  Padding"),
+                TreeLine::from(format!("{padding} bytes")),
+            ),
+        ];
+        data_children.extend(render_cap_data_nodes(&pci_capa));
+        data_node.children = data_children;
         cap_node.add_child(data_node);
 
         nodes.push(cap_node);
@@ -639,11 +738,9 @@ fn build_extended_caps_nodes(config: Option<&PciConfig>, caps: &[ExtCapEntry]) -
     nodes
 }
 
-fn render_cap_data_nodes(capa: Option<&PciCapa>, length: u16) -> Vec<TreeNode> {
+fn render_cap_data_nodes(capa: &PciCapa) -> Vec<TreeNode> {
     let mut nodes = Vec::new();
-    let Some(cap) = capa else {
-        return nodes;
-    };
+    let length = capa.size();
 
     let mut offset = 0;
     while offset < length {
@@ -652,22 +749,17 @@ fn render_cap_data_nodes(capa: Option<&PciCapa>, length: u16) -> Vec<TreeNode> {
             if offset + i >= length {
                 break;
             }
-            if let Ok(val) = cap.read_u8((offset + i) as u64) {
+            if let Ok(val) = capa.read_u8((offset + i) as u64) {
                 hex_parts.push(format!("{:02x}", val));
             } else {
                 hex_parts.push("??".to_string());
             }
         }
 
-        if hex_parts.is_empty() {
-            break;
-        }
-
         let hex = hex_parts.join(" ");
         nodes.push(TreeNode::new(TreeLine::from(format!(
             "    {:04x}: {}",
-            cap.base_offset + offset as u64,
-            hex
+            offset as u64, hex
         ))));
         offset += 16;
     }

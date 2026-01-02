@@ -1,14 +1,17 @@
 use crate::capabilities;
 
 capabilities! {
-    ext {
+    {
         id: 0x0013,
         version: 1,
+        is_extended: true,
         name: "Page Request Interface",
+        size: 16,
         registers: [
             {
                 name: "PRI Control",
                 offset: 0x04,
+                id: PRI_CTRL,
                 size: Word,
                 fields: [
                     { name: "Enable", lsb: 0, bits: 1 },
@@ -18,6 +21,7 @@ capabilities! {
             {
                 name: "PRI Status",
                 offset: 0x06,
+                id: PRI_STAT,
                 size: Word,
                 fields: [
                     { name: "Response Failure", lsb: 0, bits: 1 },
@@ -29,12 +33,14 @@ capabilities! {
             {
                 name: "PRI Max Request Supported",
                 offset: 0x08,
+                id: PRI_MAX_REQUEST_SUPPORTED,
                 size: Dword,
                 fields: []
             },
             {
                 name: "PRI Max Request Allowed",
                 offset: 0x0c,
+                id: PRI_MAX_REQUEST_ALLOWED,
                 size: Dword,
                 fields: []
             },

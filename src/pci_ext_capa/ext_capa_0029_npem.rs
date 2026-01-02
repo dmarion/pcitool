@@ -1,14 +1,17 @@
 use crate::capabilities;
 
 capabilities! {
-    ext {
+    {
         id: 0x0029,
         version: 1,
+        is_extended: true,
         name: "Native PCIe Enclosure Management",
+        size: 16,
         registers: [
             {
                 name: "NPEM Capability",
                 offset: 0x04,
+                id: NPEM_CAP,
                 size: Dword,
                 fields: [
                     { name: "NPEM Capable", lsb: 0, bits: 1 },
@@ -29,6 +32,7 @@ capabilities! {
             {
                 name: "NPEM Control",
                 offset: 0x08,
+                id: NPEM_CTRL,
                 size: Dword,
                 fields: [
                     { name: "NPEM Enable", lsb: 0, bits: 1 },
@@ -49,6 +53,7 @@ capabilities! {
             {
                 name: "NPEM Status",
                 offset: 0x0c,
+                id: NPEM_STAT,
                 size: Dword,
                 fields: [
                     { name: "NPEM Command Completed", lsb: 0, bits: 1 },

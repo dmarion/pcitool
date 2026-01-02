@@ -1,14 +1,17 @@
 use crate::capabilities;
 
 capabilities! {
-    ext {
+    {
         id: 0x001d,
         version: 1,
+        is_extended: true,
         name: "Downstream Port Containment",
+        size: 56,
         registers: [
             {
                 name: "DPC Capability",
                 offset: 0x04,
+                id: DPC_CAP,
                 size: Word,
                 fields: [
                     { name: "DPC Interrupt Message Number", lsb: 0, bits: 5 },
@@ -23,6 +26,7 @@ capabilities! {
             {
                 name: "DPC Control",
                 offset: 0x06,
+                id: DPC_CTRL,
                 size: Word,
                 fields: [
                     {
@@ -47,6 +51,7 @@ capabilities! {
             {
                 name: "DPC Status",
                 offset: 0x08,
+                id: DPC_STAT,
                 size: Word,
                 fields: [
                     { name: "DPC Trigger Status", lsb: 0, bits: 1 },
@@ -70,6 +75,7 @@ capabilities! {
             {
                 name: "DPC Error Source ID",
                 offset: 0x0a,
+                id: DPC_ERROR_SOURCE_ID,
                 size: Word,
                 fields: [
                     { name: "DPC Error Source ID", lsb: 0, bits: 16 },
@@ -78,66 +84,77 @@ capabilities! {
             {
                 name: "RP PIO Status",
                 offset: 0x0c,
+                id: RP_PIO_STAT,
                 size: Dword,
                 fields: []
             },
             {
                 name: "RP PIO Mask",
                 offset: 0x10,
+                id: RP_PIO_MASK,
                 size: Dword,
                 fields: []
             },
             {
                 name: "RP PIO Severity",
                 offset: 0x14,
+                id: RP_PIO_SEVERITY,
                 size: Dword,
                 fields: []
             },
             {
                 name: "RP PIO SysError",
                 offset: 0x18,
+                id: RP_PIO_SYSERROR,
                 size: Dword,
                 fields: []
             },
             {
                 name: "RP PIO Exception",
                 offset: 0x1c,
+                id: RP_PIO_EXCEPTION,
                 size: Dword,
                 fields: []
             },
             {
                 name: "RP PIO Header Log 0",
                 offset: 0x20,
+                id: RP_PIO_HEADER_LOG0,
                 size: Dword,
                 fields: []
             },
             {
                 name: "RP PIO Header Log 1",
                 offset: 0x24,
+                id: RP_PIO_HEADER_LOG1,
                 size: Dword,
                 fields: []
             },
             {
                 name: "RP PIO Header Log 2",
                 offset: 0x28,
+                id: RP_PIO_HEADER_LOG2,
                 size: Dword,
                 fields: []
             },
             {
                 name: "RP PIO Header Log 3",
                 offset: 0x2c,
+                id: RP_PIO_HEADER_LOG3,
                 size: Dword,
                 fields: []
             },
             {
                 name: "RP PIO ImpSpec Log",
                 offset: 0x30,
+                id: RP_PIO_IMPSPEC_LOG,
                 size: Dword,
                 fields: []
             },
             {
                 name: "RP PIO TLP Prefix Log",
                 offset: 0x34,
+                id: RP_PIO_TLP_PREFIX_LOG,
                 size: Dword,
                 fields: []
             },

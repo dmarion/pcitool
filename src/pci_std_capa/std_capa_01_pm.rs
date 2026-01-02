@@ -1,13 +1,15 @@
 use crate::capabilities;
 
 capabilities! {
-    std {
+    {
         id: 0x01,
         name: "Power Management",
+        size: 8,
         registers: [
             {
                 name: "Power Management Capabilities",
                 offset: 0x02,
+                id: POWER_MANAGEMENT_CAPS,
                 size: Word,
                 fields: [
                     { name: "Version", lsb: 0, bits: 3 },
@@ -36,6 +38,7 @@ capabilities! {
             {
                 name: "Power Management Control/Status",
                 offset: 0x04,
+                id: POWER_MANAGEMENT_CTRL_STAT,
                 size: Word,
                 fields: [
                     {

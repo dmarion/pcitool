@@ -1,14 +1,17 @@
 use crate::capabilities;
 
 capabilities! {
-    ext {
+    {
         id: 0x0022,
         version: 1,
+        is_extended: true,
         name: "Readiness Time Reporting",
+        size: 16,
         registers: [
             {
                 name: "Readiness Time Reporting 1",
                 offset: 0x04,
+                id: READINESS_TIME_REPORTING1,
                 size: Dword,
                 fields: [
                     { name: "Reset Time", lsb: 0, bits: 12 },
@@ -20,6 +23,7 @@ capabilities! {
             {
                 name: "Readiness Time Reporting 2",
                 offset: 0x08,
+                id: READINESS_TIME_REPORTING2,
                 size: Dword,
                 fields: [
                     { name: "FLR Time", lsb: 0, bits: 12 },

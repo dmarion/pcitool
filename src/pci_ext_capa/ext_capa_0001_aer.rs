@@ -3,15 +3,18 @@ use crate::pci_device::PciCapa;
 use crate::tree::{TreeColor, TreeLine, TreeNode, TreeSpan};
 
 capabilities! {
-    ext {
+    {
         id: 0x0001,
         version: 3,
+        is_extended: true,
         name: "Advanced Error Reporting",
+        get_size: get_size_v3,
         summary: summary,
         registers: [
             {
                 name: "Uncorrectable Error Status",
                 offset: 0x04,
+                id: AER_V3_UNCORRECTABLE_ERROR_STAT,
                 size: Dword,
                 fields: [
                     { name: "Data Link Protocol Error", lsb: 4, bits: 1 },
@@ -41,6 +44,7 @@ capabilities! {
             {
                 name: "Uncorrectable Error Mask",
                 offset: 0x08,
+                id: AER_V3_UNCORRECTABLE_ERROR_MASK,
                 size: Dword,
                 fields: [
                     { name: "Mask Data Link Protocol Error", lsb: 4, bits: 1 },
@@ -65,6 +69,7 @@ capabilities! {
             {
                 name: "Uncorrectable Error Severity",
                 offset: 0x0c,
+                id: AER_V3_UNCORRECTABLE_ERROR_SEVERITY,
                 size: Dword,
                 fields: [
                     { name: "Severity Data Link Protocol Error", lsb: 4, bits: 1 },
@@ -89,6 +94,7 @@ capabilities! {
             {
                 name: "Correctable Error Status",
                 offset: 0x10,
+                id: AER_V3_CORRECTABLE_ERROR_STAT,
                 size: Dword,
                 fields: [
                     { name: "Receiver Error", lsb: 0, bits: 1 },
@@ -104,6 +110,7 @@ capabilities! {
             {
                 name: "Correctable Error Mask",
                 offset: 0x14,
+                id: AER_V3_CORRECTABLE_ERROR_MASK,
                 size: Dword,
                 fields: [
                     { name: "Mask Receiver Error", lsb: 0, bits: 1 },
@@ -119,6 +126,7 @@ capabilities! {
             {
                 name: "Advanced Capabilities",
                 offset: 0x18,
+                id: AER_V3_ADVANCED_CAPS,
                 size: Dword,
                 fields: [
                     { name: "First Error Pointer", lsb: 0, bits: 5 },
@@ -136,13 +144,14 @@ capabilities! {
                     { name: "RC ECS Handling Capable", lsb: 24, bits: 1 },
                 ]
             },
-            { name: "Header Log 0", offset: 0x1c, size: Dword, fields: [] },
-            { name: "Header Log 1", offset: 0x20, size: Dword, fields: [] },
-            { name: "Header Log 2", offset: 0x24, size: Dword, fields: [] },
-            { name: "Header Log 3", offset: 0x28, size: Dword, fields: [] },
+            { name: "Header Log 0", offset: 0x1c, id: AER_V3_HEADER_LOG0, size: Dword, fields: [] },
+            { name: "Header Log 1", offset: 0x20, id: AER_V3_HEADER_LOG1, size: Dword, fields: [] },
+            { name: "Header Log 2", offset: 0x24, id: AER_V3_HEADER_LOG2, size: Dword, fields: [] },
+            { name: "Header Log 3", offset: 0x28, id: AER_V3_HEADER_LOG3, size: Dword, fields: [] },
             {
                 name: "Root Error Command",
                 offset: 0x2c,
+                id: AER_V3_ROOT_ERROR_CMD,
                 size: Dword,
                 fields: [
                     { name: "Correctable Error Reporting Enable", lsb: 0, bits: 1 },
@@ -157,6 +166,7 @@ capabilities! {
             {
                 name: "Root Error Status",
                 offset: 0x30,
+                id: AER_V3_ROOT_ERROR_STAT,
                 size: Dword,
                 fields: [
                     { name: "ERR_COR Received", lsb: 0, bits: 1 },
@@ -175,33 +185,37 @@ capabilities! {
             {
                 name: "Error Source Identification",
                 offset: 0x34,
+                id: AER_V3_ERROR_SOURCE_IDENTIFICATION,
                 size: Dword,
                 fields: [
                     { name: "ERR_COR Source Identification", lsb: 0, bits: 16 },
                     { name: "ERR_FATAL/NONFATAL Source Identification", lsb: 16, bits: 16 },
                 ]
             },
-            { name: "Header Log 4 / TLP Prefix Log 0", offset: 0x38, size: Dword, fields: [] },
-            { name: "Header Log 5 / TLP Prefix Log 1", offset: 0x3c, size: Dword, fields: [] },
-            { name: "Header Log 6 / TLP Prefix Log 2", offset: 0x40, size: Dword, fields: [] },
-            { name: "Header Log 7 / TLP Prefix Log 3", offset: 0x44, size: Dword, fields: [] },
-            { name: "Header Log 8", offset: 0x48, size: Dword, fields: [] },
-            { name: "Header Log 9", offset: 0x4c, size: Dword, fields: [] },
-            { name: "Header Log 10", offset: 0x50, size: Dword, fields: [] },
-            { name: "Header Log 11", offset: 0x54, size: Dword, fields: [] },
-            { name: "Header Log 12", offset: 0x58, size: Dword, fields: [] },
-            { name: "Header Log 13", offset: 0x5c, size: Dword, fields: [] },
+            { name: "Header Log 4 / TLP Prefix Log 0", offset: 0x38, id: AER_V3_HEADER_LOG_4_TLP_PREFIX_LOG0, size: Dword, fields: [] },
+            { name: "Header Log 5 / TLP Prefix Log 1", offset: 0x3c, id: AER_V3_HEADER_LOG_5_TLP_PREFIX_LOG1, size: Dword, fields: [] },
+            { name: "Header Log 6 / TLP Prefix Log 2", offset: 0x40, id: AER_V3_HEADER_LOG_6_TLP_PREFIX_LOG2, size: Dword, fields: [] },
+            { name: "Header Log 7 / TLP Prefix Log 3", offset: 0x44, id: AER_V3_HEADER_LOG_7_TLP_PREFIX_LOG3, size: Dword, fields: [] },
+            { name: "Header Log 8", offset: 0x48, id: AER_V3_HEADER_LOG8, size: Dword, fields: [] },
+            { name: "Header Log 9", offset: 0x4c, id: AER_V3_HEADER_LOG9, size: Dword, fields: [] },
+            { name: "Header Log 10", offset: 0x50, id: AER_V3_HEADER_LOG10, size: Dword, fields: [] },
+            { name: "Header Log 11", offset: 0x54, id: AER_V3_HEADER_LOG11, size: Dword, fields: [] },
+            { name: "Header Log 12", offset: 0x58, id: AER_V3_HEADER_LOG12, size: Dword, fields: [] },
+            { name: "Header Log 13", offset: 0x5c, id: AER_V3_HEADER_LOG13, size: Dword, fields: [] },
         ]
     },
-    ext {
+    {
         id: 0x0001,
         version: 2,
+        is_extended: true,
         name: "Advanced Error Reporting",
+        get_size: get_size_v2,
         summary: summary,
         registers: [
             {
                 name: "Uncorrectable Error Status",
                 offset: 0x04,
+                id: AER_V2_UNCORRECTABLE_ERROR_STAT,
                 size: Dword,
                 fields: [
                     { name: "Data Link Protocol Error", lsb: 4, bits: 1 },
@@ -231,6 +245,7 @@ capabilities! {
             {
                 name: "Uncorrectable Error Mask",
                 offset: 0x08,
+                id: AER_V2_UNCORRECTABLE_ERROR_MASK,
                 size: Dword,
                 fields: [
                     { name: "Mask Data Link Protocol Error", lsb: 4, bits: 1 },
@@ -255,6 +270,7 @@ capabilities! {
             {
                 name: "Uncorrectable Error Severity",
                 offset: 0x0c,
+                id: AER_V2_UNCORRECTABLE_ERROR_SEVERITY,
                 size: Dword,
                 fields: [
                     { name: "Severity Data Link Protocol Error", lsb: 4, bits: 1 },
@@ -279,6 +295,7 @@ capabilities! {
             {
                 name: "Correctable Error Status",
                 offset: 0x10,
+                id: AER_V2_CORRECTABLE_ERROR_STAT,
                 size: Dword,
                 fields: [
                     { name: "Receiver Error", lsb: 0, bits: 1 },
@@ -294,6 +311,7 @@ capabilities! {
             {
                 name: "Correctable Error Mask",
                 offset: 0x14,
+                id: AER_V2_CORRECTABLE_ERROR_MASK,
                 size: Dword,
                 fields: [
                     { name: "Mask Receiver Error", lsb: 0, bits: 1 },
@@ -309,6 +327,7 @@ capabilities! {
             {
                 name: "Advanced Capabilities",
                 offset: 0x18,
+                id: AER_V2_ADVANCED_CAPS,
                 size: Dword,
                 fields: [
                     { name: "First Error Pointer", lsb: 0, bits: 5 },
@@ -326,13 +345,14 @@ capabilities! {
                     { name: "RC ECS Handling Capable", lsb: 24, bits: 1 },
                 ]
             },
-            { name: "Header Log 0", offset: 0x1c, size: Dword, fields: [] },
-            { name: "Header Log 1", offset: 0x20, size: Dword, fields: [] },
-            { name: "Header Log 2", offset: 0x24, size: Dword, fields: [] },
-            { name: "Header Log 3", offset: 0x28, size: Dword, fields: [] },
+            { name: "Header Log 0", offset: 0x1c, id: AER_V2_HEADER_LOG0, size: Dword, fields: [] },
+            { name: "Header Log 1", offset: 0x20, id: AER_V2_HEADER_LOG1, size: Dword, fields: [] },
+            { name: "Header Log 2", offset: 0x24, id: AER_V2_HEADER_LOG2, size: Dword, fields: [] },
+            { name: "Header Log 3", offset: 0x28, id: AER_V2_HEADER_LOG3, size: Dword, fields: [] },
             {
                 name: "Root Error Command",
                 offset: 0x2c,
+                id: AER_V2_ROOT_ERROR_CMD,
                 size: Dword,
                 fields: [
                     { name: "Correctable Error Reporting Enable", lsb: 0, bits: 1 },
@@ -347,6 +367,7 @@ capabilities! {
             {
                 name: "Root Error Status",
                 offset: 0x30,
+                id: AER_V2_ROOT_ERROR_STAT,
                 size: Dword,
                 fields: [
                     { name: "ERR_COR Received", lsb: 0, bits: 1 },
@@ -365,27 +386,31 @@ capabilities! {
             {
                 name: "Error Source Identification",
                 offset: 0x34,
+                id: AER_V2_ERROR_SOURCE_IDENTIFICATION,
                 size: Dword,
                 fields: [
                     { name: "ERR_COR Source Identification", lsb: 0, bits: 16 },
                     { name: "ERR_FATAL/NONFATAL Source Identification", lsb: 16, bits: 16 },
                 ]
             },
-            { name: "TLP Prefix Log 0", offset: 0x38, size: Dword, fields: [] },
-            { name: "TLP Prefix Log 1", offset: 0x3c, size: Dword, fields: [] },
-            { name: "TLP Prefix Log 2", offset: 0x40, size: Dword, fields: [] },
-            { name: "TLP Prefix Log 3", offset: 0x44, size: Dword, fields: [] },
+            { name: "TLP Prefix Log 0", offset: 0x38, id: AER_V2_TLP_PREFIX_LOG0, size: Dword, fields: [] },
+            { name: "TLP Prefix Log 1", offset: 0x3c, id: AER_V2_TLP_PREFIX_LOG1, size: Dword, fields: [] },
+            { name: "TLP Prefix Log 2", offset: 0x40, id: AER_V2_TLP_PREFIX_LOG2, size: Dword, fields: [] },
+            { name: "TLP Prefix Log 3", offset: 0x44, id: AER_V2_TLP_PREFIX_LOG3, size: Dword, fields: [] },
         ]
     },
-    ext {
+    {
         id: 0x0001,
         version: 1,
+        is_extended: true,
         name: "Advanced Error Reporting",
+        get_size: get_size_v1,
         summary: summary,
         registers: [
             {
                 name: "Uncorrectable Error Status",
                 offset: 0x04,
+                id: AER_V1_UNCORRECTABLE_ERROR_STAT,
                 size: Dword,
                 fields: [
                     { name: "Data Link Protocol Error", lsb: 4, bits: 1 },
@@ -415,6 +440,7 @@ capabilities! {
             {
                 name: "Uncorrectable Error Mask",
                 offset: 0x08,
+                id: AER_V1_UNCORRECTABLE_ERROR_MASK,
                 size: Dword,
                 fields: [
                     { name: "Mask Data Link Protocol Error", lsb: 4, bits: 1 },
@@ -439,6 +465,7 @@ capabilities! {
             {
                 name: "Uncorrectable Error Severity",
                 offset: 0x0c,
+                id: AER_V1_UNCORRECTABLE_ERROR_SEVERITY,
                 size: Dword,
                 fields: [
                     { name: "Severity Data Link Protocol Error", lsb: 4, bits: 1 },
@@ -463,6 +490,7 @@ capabilities! {
             {
                 name: "Correctable Error Status",
                 offset: 0x10,
+                id: AER_V1_CORRECTABLE_ERROR_STAT,
                 size: Dword,
                 fields: [
                     { name: "Receiver Error", lsb: 0, bits: 1 },
@@ -478,6 +506,7 @@ capabilities! {
             {
                 name: "Correctable Error Mask",
                 offset: 0x14,
+                id: AER_V1_CORRECTABLE_ERROR_MASK,
                 size: Dword,
                 fields: [
                     { name: "Mask Receiver Error", lsb: 0, bits: 1 },
@@ -493,6 +522,7 @@ capabilities! {
             {
                 name: "Advanced Capabilities",
                 offset: 0x18,
+                id: AER_V1_ADVANCED_CAPS,
                 size: Dword,
                 fields: [
                     { name: "First Error Pointer", lsb: 0, bits: 5 },
@@ -508,6 +538,64 @@ capabilities! {
             },
         ]
     }
+}
+
+fn get_size_v3(cap: &PciCapa) -> Option<u16> {
+    aer_size_with_header_log_size(cap, AER_V3_ADVANCED_CAPS)
+}
+
+fn get_size_v2(cap: &PciCapa) -> Option<u16> {
+    aer_size_with_header_log_size(cap, AER_V2_ADVANCED_CAPS)
+}
+
+fn get_size_v1(cap: &PciCapa) -> Option<u16> {
+    aer_size_legacy(cap, AER_V1_ADVANCED_CAPS)
+}
+
+fn aer_size_with_header_log_size(cap: &PciCapa, adv_off: u16) -> Option<u16> {
+    let adv = cap.read_u32(u64::from(adv_off)).ok()?;
+    let header_dw = aer_header_log_dw(adv);
+    Some(aer_total_len(cap, header_dw))
+}
+
+fn aer_size_legacy(cap: &PciCapa, adv_off: u16) -> Option<u16> {
+    let adv = cap.read_u32(u64::from(adv_off)).ok()?;
+    let tlp_prefix = (adv >> 11) & 0x1 != 0;
+    let header_dw = if tlp_prefix { 8 } else { 4 };
+    Some(aer_total_len(cap, header_dw))
+}
+
+fn aer_header_log_dw(adv: u32) -> u16 {
+    let mut dw = ((adv >> 13) & 0x1f) as u16;
+    if dw == 0 {
+        let tlp_prefix = (adv >> 11) & 0x1 != 0;
+        dw = if tlp_prefix { 8 } else { 4 };
+    }
+    if dw < 4 {
+        dw = 4;
+    }
+    dw
+}
+
+fn aer_total_len(cap: &PciCapa, header_dw: u16) -> u16 {
+    let base = if aer_has_root_regs(cap) { 0x38 } else { 0x2c };
+    let extra_dw = header_dw.saturating_sub(4);
+    base + extra_dw * 4
+}
+
+fn aer_has_root_regs(cap: &PciCapa) -> bool {
+    let Some(pcie_off) = cap.pcie_cap_offset() else {
+        return true;
+    };
+    let Ok(pcie_cap) = cap.read_cfg_u16(pcie_off + 0x02) else {
+        return true;
+    };
+    let port_type = (pcie_cap >> 4) & 0x0f;
+    is_root_port_type(port_type)
+}
+
+fn is_root_port_type(port_type: u16) -> bool {
+    matches!(port_type, 0x4 | 0x9 | 0xa)
 }
 
 fn summary(cap: &PciCapa) -> Option<Vec<TreeNode>> {

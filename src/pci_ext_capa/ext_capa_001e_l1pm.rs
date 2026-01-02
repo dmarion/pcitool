@@ -1,14 +1,17 @@
 use crate::capabilities;
 
 capabilities! {
-    ext {
+    {
         id: 0x001e,
         version: 1,
+        is_extended: true,
         name: "L1 PM Substates",
+        size: 20,
         registers: [
             {
                 name: "L1 PM Substate Capability",
                 offset: 0x04,
+                id: L1_PM_SUBSTATE_CAP,
                 size: Dword,
                 fields: [
                     { name: "PCI-PM L1.2 Supported", lsb: 0, bits: 1 },
@@ -34,6 +37,7 @@ capabilities! {
             {
                 name: "L1 PM Substate Control 1",
                 offset: 0x08,
+                id: L1_PM_SUBSTATE_CTRL1,
                 size: Dword,
                 fields: [
                     { name: "PCI-PM L1.2 Enable", lsb: 0, bits: 1 },
@@ -62,6 +66,7 @@ capabilities! {
             {
                 name: "L1 PM Substate Control 2",
                 offset: 0x0c,
+                id: L1_PM_SUBSTATE_CTRL2,
                 size: Dword,
                 fields: [
                     {
@@ -80,6 +85,7 @@ capabilities! {
             {
                 name: "L1 PM Substate Status",
                 offset: 0x10,
+                id: L1_PM_SUBSTATE_STAT,
                 size: Dword,
                 fields: [
                     { name: "Link Activation Status", lsb: 0, bits: 1 },

@@ -1,4 +1,5 @@
 use crate::capabilities;
+use crate::pci_device::PciCapa;
 
 const TX_PRESETS: &[(u64, &str)] = &[
     (0x0, "P0"),
@@ -15,14 +16,17 @@ const TX_PRESETS: &[(u64, &str)] = &[
 ];
 
 capabilities! {
-    ext {
+    {
         id: 0x0039,
         version: 1,
+        is_extended: true,
         name: "Physical Layer 128.0 GT/s",
+        get_size: get_size,
         registers: [
             {
                 name: "Capability",
                 offset: 0x04,
+                id: CAP,
                 size: Dword,
                 fields: [
                     { name: "No Equalization Needed supported", lsb: 1, bits: 1 },
@@ -31,6 +35,7 @@ capabilities! {
             {
                 name: "Control",
                 offset: 0x08,
+                id: CTRL,
                 size: Dword,
                 fields: [
                     { name: "No Equalization Needed disable", lsb: 1, bits: 1 },
@@ -39,6 +44,7 @@ capabilities! {
             {
                 name: "Status",
                 offset: 0x0c,
+                id: STAT,
                 size: Dword,
                 fields: [
                     { name: "Equalization 128 GT/s complete", lsb: 0, bits: 1 },
@@ -56,6 +62,7 @@ capabilities! {
             {
                 name: "Lane 0 Equalization Control",
                 offset: 0x10,
+                id: LANE_0_EQ_CTRL,
                 size: Byte,
                 fields: [
                     { name: "Downstream Transmitter Preset", lsb: 0, bits: 4, enum_values: TX_PRESETS },
@@ -65,6 +72,7 @@ capabilities! {
             {
                 name: "Lane 1 Equalization Control",
                 offset: 0x11,
+                id: LANE_1_EQ_CTRL,
                 size: Byte,
                 fields: [
                     { name: "Downstream Transmitter Preset", lsb: 0, bits: 4, enum_values: TX_PRESETS },
@@ -74,6 +82,7 @@ capabilities! {
             {
                 name: "Lane 2 Equalization Control",
                 offset: 0x12,
+                id: LANE_2_EQ_CTRL,
                 size: Byte,
                 fields: [
                     { name: "Downstream Transmitter Preset", lsb: 0, bits: 4, enum_values: TX_PRESETS },
@@ -83,6 +92,7 @@ capabilities! {
             {
                 name: "Lane 3 Equalization Control",
                 offset: 0x13,
+                id: LANE_3_EQ_CTRL,
                 size: Byte,
                 fields: [
                     { name: "Downstream Transmitter Preset", lsb: 0, bits: 4, enum_values: TX_PRESETS },
@@ -92,6 +102,7 @@ capabilities! {
             {
                 name: "Lane 4 Equalization Control",
                 offset: 0x14,
+                id: LANE_4_EQ_CTRL,
                 size: Byte,
                 fields: [
                     { name: "Downstream Transmitter Preset", lsb: 0, bits: 4, enum_values: TX_PRESETS },
@@ -101,6 +112,7 @@ capabilities! {
             {
                 name: "Lane 5 Equalization Control",
                 offset: 0x15,
+                id: LANE_5_EQ_CTRL,
                 size: Byte,
                 fields: [
                     { name: "Downstream Transmitter Preset", lsb: 0, bits: 4, enum_values: TX_PRESETS },
@@ -110,6 +122,7 @@ capabilities! {
             {
                 name: "Lane 6 Equalization Control",
                 offset: 0x16,
+                id: LANE_6_EQ_CTRL,
                 size: Byte,
                 fields: [
                     { name: "Downstream Transmitter Preset", lsb: 0, bits: 4, enum_values: TX_PRESETS },
@@ -119,6 +132,7 @@ capabilities! {
             {
                 name: "Lane 7 Equalization Control",
                 offset: 0x17,
+                id: LANE_7_EQ_CTRL,
                 size: Byte,
                 fields: [
                     { name: "Downstream Transmitter Preset", lsb: 0, bits: 4, enum_values: TX_PRESETS },
@@ -127,4 +141,9 @@ capabilities! {
             },
         ]
     }
+}
+
+fn get_size(cap: &PciCapa) -> Option<u16> {
+    let lanes = cap.max_link_width()?.min(16);
+    Some(0x10 + lanes)
 }

@@ -19,14 +19,17 @@ const TLPS_PER_HALF_FLIT: &[(u64, &str)] = &[
 ];
 
 capabilities! {
-    ext {
+    {
         id: 0x0025,
         version: 1,
+        is_extended: true,
         name: "Data Link Feature",
+        size: 16,
         registers: [
             {
                 name: "Data Link Feature Capabilities",
                 offset: 0x04,
+                id: DATA_LINK_FEATURE_CAPS,
                 size: Dword,
                 fields: [
                     { name: "Local Scaled Flow Control Supported", lsb: 0, bits: 1 },
@@ -40,6 +43,7 @@ capabilities! {
             {
                 name: "Data Link Feature Status",
                 offset: 0x08,
+                id: DATA_LINK_FEATURE_STAT,
                 size: Dword,
                 fields: [
                     { name: "Remote Scaled Flow Control Supported", lsb: 0, bits: 1 },

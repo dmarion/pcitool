@@ -1,14 +1,17 @@
 use crate::capabilities;
 
 capabilities! {
-    ext {
+    {
         id: 0x002f,
         version: 1,
+        is_extended: true,
         name: "Device 3",
+        size: 16,
         registers: [
             {
                 name: "Device Capabilities 3",
                 offset: 0x04,
+                id: DEVICE_CAPS3,
                 size: Dword,
                 fields: [
                     { name: "DMWr Request Routing Supported", lsb: 0, bits: 1 },
@@ -25,6 +28,7 @@ capabilities! {
             {
                 name: "Device Control 3",
                 offset: 0x08,
+                id: DEVICE_CTRL3,
                 size: Dword,
                 fields: [
                     { name: "DMWr Requester Enable", lsb: 0, bits: 1 },
@@ -39,6 +43,7 @@ capabilities! {
             {
                 name: "Device Status 3",
                 offset: 0x0c,
+                id: DEVICE_STAT3,
                 size: Dword,
                 fields: [
                     { name: "Remote L0p Supported", lsb: 0, bits: 3 },

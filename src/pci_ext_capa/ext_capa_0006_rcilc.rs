@@ -1,14 +1,17 @@
 use crate::capabilities;
 
 capabilities! {
-    ext {
+    {
         id: 0x0006,
         version: 1,
+        is_extended: true,
         name: "Root Complex Internal Link Control",
+        size: 16,
         registers: [
             {
                 name: "Root Complex Link Capabilities",
                 offset: 0x04,
+                id: ROOT_COMPLEX_LINK_CAPS,
                 size: Dword,
                 fields: [
                     { name: "Max Link Speed", lsb: 0, bits: 4 },
@@ -21,6 +24,7 @@ capabilities! {
             {
                 name: "Root Complex Link Control",
                 offset: 0x08,
+                id: ROOT_COMPLEX_LINK_CTRL,
                 size: Word,
                 fields: [
                     { name: "ASPM Control", lsb: 0, bits: 2 },
@@ -32,6 +36,7 @@ capabilities! {
             {
                 name: "Root Complex Link Status",
                 offset: 0x0a,
+                id: ROOT_COMPLEX_LINK_STAT,
                 size: Word,
                 fields: [
                     { name: "Current Link Speed", lsb: 0, bits: 4 },

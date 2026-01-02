@@ -1,13 +1,15 @@
 use crate::capabilities;
 
 capabilities! {
-    std {
+    {
         id: 0x08,
         name: "HyperTransport",
+        size: 8,
         registers: [
             {
                 name: "Command",
                 offset: 0x02,
+                id: CMD,
                 size: Word,
                 fields: [
                     {
@@ -41,6 +43,7 @@ capabilities! {
             {
                 name: "Link Control",
                 offset: 0x04,
+                id: LINK_CTRL,
                 size: Word,
                 fields: [
                     {

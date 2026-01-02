@@ -5,14 +5,16 @@ use std::thread;
 use std::time::Duration;
 
 capabilities! {
-    std {
+    {
         id: 0x03,
         name: "Vital Product Data",
+        size: 8,
         summary: vpd_summary,
         registers: [
             {
                 name: "VPD Address",
                 offset: 0x02,
+                id: VPD_ADDR,
                 size: Word,
                 fields: [
                     { name: "VPD Address", lsb: 0, bits: 15 },
@@ -30,6 +32,7 @@ capabilities! {
             {
                 name: "VPD Data",
                 offset: 0x04,
+                id: VPD_DATA,
                 size: Dword,
                 fields: []
             }
@@ -76,18 +79,18 @@ fn vpd_summary(capa: &PciCapa) -> Option<Vec<TreeNode>> {
 }
 
 fn read_vpd_dword(cap: &PciCapa, vpd_addr: u16) -> Option<u32> {
-    let addr_reg = 0x02;
-    let data_reg = 0x04;
-
-    if cap.write_u16(addr_reg, vpd_addr & 0x7fff).is_err() {
+    if cap
+        .write_u16(u64::from(VPD_ADDR), vpd_addr & 0x7fff)
+        .is_err()
+    {
         return None;
     }
 
     for _ in 0..50 {
         thread::sleep(Duration::from_millis(1));
-        if let Ok(val) = cap.read_u16(addr_reg) {
+        if let Ok(val) = cap.read_u16(u64::from(VPD_ADDR)) {
             if val & 0x8000 != 0 {
-                return cap.read_u32(data_reg).ok();
+                return cap.read_u32(u64::from(VPD_DATA)).ok();
             }
         }
     }

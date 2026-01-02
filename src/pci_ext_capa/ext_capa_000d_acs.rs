@@ -1,14 +1,17 @@
 use crate::capabilities;
 
 capabilities! {
-    ext {
+    {
         id: 0x000d,
         version: 1,
+        is_extended: true,
         name: "Access Controls",
+        size: 12,
         registers: [
             {
                 name: "ACS Capability",
                 offset: 0x04,
+                id: ACS_CAP,
                 size: Word,
                 fields: [
                     { name: "Source Validation", lsb: 0, bits: 1 },
@@ -25,6 +28,7 @@ capabilities! {
             {
                 name: "ACS Control",
                 offset: 0x06,
+                id: ACS_CTRL,
                 size: Word,
                 fields: [
                     { name: "Source Validation Enable", lsb: 0, bits: 1 },
@@ -43,6 +47,7 @@ capabilities! {
             {
                 name: "ACS Egress Control Vector",
                 offset: 0x08,
+                id: ACS_EGRESS_CTRL_VECTOR,
                 size: Dword,
                 fields: []
             },

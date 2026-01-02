@@ -1,13 +1,15 @@
 use crate::capabilities;
 
 capabilities! {
-    std {
+    {
         id: 0x12,
         name: "SATA Data Index Configuration",
+        size: 8,
         registers: [
             {
                 name: "SATA Capability",
                 offset: 0x02,
+                id: SATA_CAP,
                 size: Word,
                 fields: [
                     { name: "Revision", lsb: 0, bits: 4 },

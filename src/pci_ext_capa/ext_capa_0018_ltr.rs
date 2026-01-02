@@ -1,14 +1,17 @@
 use crate::capabilities;
 
 capabilities! {
-    ext {
+    {
         id: 0x0018,
         version: 1,
+        is_extended: true,
         name: "Latency Tolerance Reporting",
+        size: 8,
         registers: [
             {
                 name: "Max Snoop Latency",
                 offset: 0x04,
+                id: MAX_SNOOP_LATENCY,
                 size: Word,
                 fields: [
                     { name: "Snoop Latency Value", lsb: 0, bits: 10 },
@@ -30,6 +33,7 @@ capabilities! {
             {
                 name: "Max No Snoop Latency",
                 offset: 0x06,
+                id: MAX_NO_SNOOP_LATENCY,
                 size: Word,
                 fields: [
                     { name: "No Snoop Latency Value", lsb: 0, bits: 10 },

@@ -1,14 +1,17 @@
 use crate::capabilities;
 
 capabilities! {
-    ext {
+    {
         id: 0x000e,
         version: 1,
+        is_extended: true,
         name: "Alternative Routing-ID Interpretation",
+        size: 8,
         registers: [
             {
                 name: "ARI Capability",
                 offset: 0x04,
+                id: ARI_CAP,
                 size: Word,
                 fields: [
                     { name: "MFVC Function Groups Capability", lsb: 0, bits: 1 },
@@ -19,6 +22,7 @@ capabilities! {
             {
                 name: "ARI Control",
                 offset: 0x06,
+                id: ARI_CTRL,
                 size: Word,
                 fields: [
                     { name: "MFVC Function Groups Enable", lsb: 0, bits: 1 },
