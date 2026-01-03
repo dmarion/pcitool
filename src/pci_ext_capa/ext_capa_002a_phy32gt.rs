@@ -297,11 +297,18 @@ fn summary(cap: &PciCapa) -> Option<Vec<TreeNode>> {
         if idx > 0 {
             spans.push(TreeSpan::raw(" "));
         }
-        spans.push(TreeSpan::raw(*label));
-        if *val {
-            spans.push(TreeSpan::styled("+", TreeColor::Green));
+        let color = if *val {
+            TreeColor::Green
         } else {
-            spans.push(TreeSpan::styled("-", TreeColor::Red));
+            TreeColor::Red
+        };
+        if let Some(rest) = label.strip_prefix("Equalization ") {
+            spans.push(TreeSpan::raw("Equalization "));
+            let text = format!("{}{}", rest, if *val { "+" } else { "-" });
+            spans.push(TreeSpan::styled(text, color));
+        } else {
+            let text = format!("{}{}", label, if *val { "+" } else { "-" });
+            spans.push(TreeSpan::styled(text, color));
         }
     }
 

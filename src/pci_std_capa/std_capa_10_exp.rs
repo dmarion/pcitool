@@ -535,6 +535,45 @@ fn pcie_summary(cap: &PciCapa) -> Option<Vec<TreeNode>> {
     let mut link_cap_speed: Option<u8> = None;
     let mut link_cap_width: Option<u8> = None;
 
+    if let Ok(status) = cap.read_u16(u64::from(LINK_STAT2)) {
+        let eq_complete = status & 0x2 != 0;
+        let phase1 = status & 0x4 != 0;
+        let phase2 = status & 0x8 != 0;
+        let phase3 = status & 0x10 != 0;
+
+        let mut spans = Vec::new();
+        let fields = [
+            ("Equalization Complete", eq_complete),
+            ("Phase1", phase1),
+            ("Phase2", phase2),
+            ("Phase3", phase3),
+        ];
+
+        for (idx, (label, val)) in fields.iter().enumerate() {
+            if idx > 0 {
+                spans.push(TreeSpan::raw(" "));
+            }
+            let color = if *val {
+                TreeColor::Green
+            } else {
+                TreeColor::Red
+            };
+            if let Some(rest) = label.strip_prefix("Equalization ") {
+                spans.push(TreeSpan::raw("Equalization "));
+                let text = format!("{}{}", rest, if *val { "+" } else { "-" });
+                spans.push(TreeSpan::styled(text, color));
+            } else {
+                let text = format!("{}{}", label, if *val { "+" } else { "-" });
+                spans.push(TreeSpan::styled(text, color));
+            }
+        }
+
+        nodes.push(TreeNode::with_value(
+            TreeLine::from("Physical Layer 8.0 GT/s"),
+            TreeLine::from(spans),
+        ));
+    }
+
     if let Ok(status) = cap.read_u16(u64::from(DEVICE_STAT)) {
         let mut flags: Vec<(&'static str, bool)> = Vec::new();
         if status & (1 << 0) != 0 {
