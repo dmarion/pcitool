@@ -11,6 +11,7 @@ mod pci_device;
 mod pci_ids;
 mod tree;
 mod tui;
+mod update;
 
 mod pci_ext_capa;
 mod pci_std_capa;
@@ -25,6 +26,9 @@ pub const CONFIG_READ_BYTES: usize = 4096;
 use crate::cli::Args;
 
 fn main() -> Result<()> {
+    // Start background update check
+    let update_checker = update::UpdateChecker::start();
+
     if getuid() != Uid::ROOT {
         return Err(anyhow!("pcitool must be run as root"));
     }
@@ -80,6 +84,9 @@ fn main() -> Result<()> {
             .unwrap_or(0);
         tui::run(summaries, final_idx, args.address.is_none())?;
     }
+
+    // Report update if available
+    update_checker.check_and_report();
 
     Ok(())
 }
