@@ -1,4 +1,6 @@
 use crate::capabilities;
+use crate::pci_device::PciCapa;
+use crate::tree::{TreeLine, TreeNode};
 
 capabilities! {
     {
@@ -7,6 +9,7 @@ capabilities! {
         is_extended: true,
         name: "Single Root I/O Virtualization",
         size: 64,
+        summary: sriov_summary,
         registers: [
             {
                 name: "Capabilities",
@@ -157,4 +160,23 @@ capabilities! {
             },
         ]
     }
+}
+
+fn sriov_summary(cap: &PciCapa) -> Option<Vec<TreeNode>> {
+    let total = cap.read_u16(u64::from(MAXIMUM_VFS_SUPPORTED)).ok()?;
+    let initial = cap
+        .read_u16(u64::from(NUMBER_OF_VFS_INITIALLY_SUPPORTED))
+        .ok()?;
+    let enabled = cap
+        .read_u16(u64::from(NUMBER_OF_VFS_THAT_CAN_BE_ENABLED))
+        .ok()?;
+    let dev_id = cap.read_u16(u64::from(DEVICE_ID_ASSIGNED_TO_VFS)).ok()?;
+
+    Some(vec![TreeNode::with_value(
+        TreeLine::from("Virtual Functions"),
+        TreeLine::from(format!(
+            "Total {}, Initial {}, Enabled {}, Device ID {:04x}",
+            total, initial, enabled, dev_id
+        )),
+    )])
 }
