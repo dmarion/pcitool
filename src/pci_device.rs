@@ -611,16 +611,12 @@ fn read_ext_block(
     }
 
     if length == 0 {
-        if next == 0 {
-            let available = config.len().saturating_sub(start);
-            length = available as u16;
-        } else {
-            return None;
-        }
+        let available = config.len().saturating_sub(start);
+        length = available as u16;
     }
 
     // Validation
-    if next != 0 && (next <= start || next > config.len()) {
+    if next != 0 && next > config.len() {
         return None;
     }
 
